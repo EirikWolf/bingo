@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Storskjerm: skjul scrollbar */
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@layer components {
+  /* Bingo-ball sirkel */
+  .bingo-ball {
+    @apply flex h-12 w-12 items-center justify-center rounded-full
+           text-lg font-bold text-white shadow-md transition-transform;
+  }
+
+  .bingo-ball-lg {
+    @apply flex h-24 w-24 items-center justify-center rounded-full
+           text-4xl font-extrabold text-white shadow-xl;
+  }
+
+  /* Kupong-rute */
+  .coupon-cell {
+    @apply flex aspect-square items-center justify-center rounded-lg
+           border-2 border-gray-200 text-lg font-semibold transition-all;
+  }
+
+  .coupon-cell-marked {
+    @apply border-bingo-500 bg-bingo-500 text-white shadow-inner;
+  }
+
+  .coupon-cell-free {
+    @apply border-bingo-300 bg-bingo-100 text-bingo-600;
+  }
+}

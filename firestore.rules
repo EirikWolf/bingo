@@ -1,0 +1,260 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================================================
+    // Hjelpefunksjoner
+    // ============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && getUserRole() == 'superadmin';
+    }
+
+    function isLocationAdmin(locationId) {
+      return isAuthenticated()
+        && request.auth.uid in get(/databases/$(database)/documents/locations/$(locationId)).data.adminUids;
+    }
+
+    function isLocationAdminOrSuper(locationId) {
+      return isSuperAdmin() || isLocationAdmin(locationId);
+    }
+
+    function getGame(locationId, gameId) {
+      return get(/databases/$(database)/documents/locations/$(locationId)/games/$(gameId));
+    }
+
+    // ============================================================
+    // Kupongvalidering — erstatter Cloud Function
+    // Sikrer at klienten ikke kan sende ugyldig kupong
+    // ============================================================
+
+    function isValidCouponGrid(numbers) {
+      // Må være en liste med 5 rader
+      return numbers is list
+        && numbers.size() == 5
+        // Hver rad må ha 5 elementer
+        && numbers[0].size() == 5
+        && numbers[1].size() == 5
+        && numbers[2].size() == 5
+        && numbers[3].size() == 5
+        && numbers[4].size() == 5
+        // Sentrum (rad 2, kolonne 2) må være 0 (fri rute)
+        && numbers[2][2] == 0
+        // Sjekk tallområder per kolonne (B:1-15, I:16-30, N:31-45, G:46-60, O:61-75)
+        && isValidColumn(numbers, 0, 1, 15)
+        && isValidColumn(numbers, 1, 16, 30)
+        && isValidNColumn(numbers, 2, 31, 45)
+        && isValidColumn(numbers, 3, 46, 60)
+        && isValidColumn(numbers, 4, 61, 75);
+    }
+
+    function isValidColumn(numbers, col, minVal, maxVal) {
+      return numbers[0][col] >= minVal && numbers[0][col] <= maxVal
+        && numbers[1][col] >= minVal && numbers[1][col] <= maxVal
+        && numbers[2][col] >= minVal && numbers[2][col] <= maxVal
+        && numbers[3][col] >= minVal && numbers[3][col] <= maxVal
+        && numbers[4][col] >= minVal && numbers[4][col] <= maxVal
+        // Alle tall må være unike (parvise sjekker)
+        && numbers[0][col] != numbers[1][col]
+        && numbers[0][col] != numbers[2][col]
+        && numbers[0][col] != numbers[3][col]
+        && numbers[0][col] != numbers[4][col]
+        && numbers[1][col] != numbers[2][col]
+        && numbers[1][col] != numbers[3][col]
+        && numbers[1][col] != numbers[4][col]
+        && numbers[2][col] != numbers[3][col]
+        && numbers[2][col] != numbers[4][col]
+        && numbers[3][col] != numbers[4][col];
+    }
+
+    function isValidNColumn(numbers, col, minVal, maxVal) {
+      // N-kolonnen har fri rute (0) i rad 2, så kun 4 tall å sjekke
+      return numbers[0][col] >= minVal && numbers[0][col] <= maxVal
+        && numbers[1][col] >= minVal && numbers[1][col] <= maxVal
+        // numbers[2][col] == 0 (fri rute, sjekket i isValidCouponGrid)
+        && numbers[3][col] >= minVal && numbers[3][col] <= maxVal
+        && numbers[4][col] >= minVal && numbers[4][col] <= maxVal
+        && numbers[0][col] != numbers[1][col]
+        && numbers[0][col] != numbers[3][col]
+        && numbers[0][col] != numbers[4][col]
+        && numbers[1][col] != numbers[3][col]
+        && numbers[1][col] != numbers[4][col]
+        && numbers[3][col] != numbers[4][col];
+    }
+
+    function isValidMarkedGrid(markedCells) {
+      return markedCells is list
+        && markedCells.size() == 5
+        && markedCells[0].size() == 5
+        && markedCells[1].size() == 5
+        && markedCells[2].size() == 5
+        && markedCells[3].size() == 5
+        && markedCells[4].size() == 5
+        // Sentrum alltid markert
+        && markedCells[2][2] == true;
+    }
+
+    // ============================================================
+    // Brukere
+    // ============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+
+      // Bruker kan opprette sin egen profil med rolle 'player'
+      allow create: if isOwner(userId)
+        && request.resource.data.role == 'player'
+        && request.resource.data.keys().hasAll(['uid', 'displayName', 'role', 'createdAt']);
+
+      // Bruker kan oppdatere sin egen profil (ikke endre rolle)
+      allow update: if isOwner(userId)
+        && request.resource.data.role == resource.data.role;
+
+      // Superadmin kan oppdatere alle (inkl. rolleendring)
+      allow update: if isSuperAdmin();
+
+      allow delete: if false;
+    }
+
+    // ============================================================
+    // Lokasjoner
+    // ============================================================
+
+    match /locations/{locationId} {
+      allow read: if isAuthenticated();
+      allow create: if isSuperAdmin();
+      allow update: if isLocationAdminOrSuper(locationId);
+      allow delete: if isSuperAdmin();
+
+      // ============================================================
+      // Spill
+      // ============================================================
+
+      match /games/{gameId} {
+        allow read: if isAuthenticated();
+
+        // Admin kan opprette spill
+        allow create: if isLocationAdminOrSuper(locationId)
+          && request.resource.data.status == 'setup'
+          && request.resource.data.drawnNumbers.size() == 0;
+
+        // Admin kan oppdatere spill (status, trekke tall, legge til vinner)
+        allow update: if isLocationAdminOrSuper(locationId);
+
+        allow delete: if false;
+
+        // ============================================================
+        // Kuponger — opprettes av spillere, valideres av regler
+        // ============================================================
+
+        match /coupons/{couponId} {
+          // Spiller ser egne kuponger, admin ser alle
+          allow read: if isAuthenticated()
+            && (resource.data.userId == request.auth.uid
+                || isLocationAdminOrSuper(locationId));
+
+          // Spiller kan opprette kupong HVIS:
+          allow create: if isAuthenticated()
+            // Eierskap
+            && request.resource.data.userId == request.auth.uid
+            // Spillet er åpent for kjøp
+            && getGame(locationId, gameId).data.status == 'open'
+            // Kupongen har gyldig format
+            && isValidCouponGrid(request.resource.data.numbers)
+            && isValidMarkedGrid(request.resource.data.markedCells)
+            // Ikke allerede vinner
+            && request.resource.data.isWinner == false
+            && request.resource.data.winCondition == null
+            // Har påkrevde felt
+            && request.resource.data.keys().hasAll([
+                'userId', 'userDisplayName', 'numbers', 'markedCells',
+                'commitmentId', 'isWinner', 'winCondition', 'purchasedAt'
+              ]);
+
+          // Ingen kan oppdatere kuponger direkte
+          // (vinnerstatus settes via bingo_claims + admin-godkjenning)
+          allow update: if false;
+
+          allow delete: if false;
+        }
+
+        // ============================================================
+        // Bingo-rop — spillere sender, admin godkjenner
+        // ============================================================
+
+        match /bingo_claims/{claimId} {
+          allow read: if isAuthenticated()
+            && (resource.data.userId == request.auth.uid
+                || isLocationAdminOrSuper(locationId));
+
+          // Spiller kan sende bingo-rop
+          allow create: if isAuthenticated()
+            && request.resource.data.userId == request.auth.uid
+            && request.resource.data.status == 'pending'
+            && getGame(locationId, gameId).data.status == 'active'
+            && request.resource.data.keys().hasAll([
+                'userId', 'userDisplayName', 'couponId', 'status', 'claimedAt'
+              ]);
+
+          // Kun admin kan oppdatere (godkjenne/avvise)
+          allow update: if isLocationAdminOrSuper(locationId)
+            && request.resource.data.status in ['approved', 'rejected'];
+
+          allow delete: if false;
+        }
+      }
+    }
+
+    // ============================================================
+    // Forpliktelser
+    // ============================================================
+
+    match /commitments/{commitmentId} {
+      // Spiller leser egne, admin leser for sin lokasjon, superadmin leser alle
+      allow read: if isAuthenticated()
+        && (resource.data.userId == request.auth.uid
+            || isLocationAdmin(resource.data.locationId)
+            || isSuperAdmin());
+
+      // Spiller kan opprette forpliktelse (ved kupongkjøp)
+      allow create: if isAuthenticated()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.keys().hasAll([
+            'userId', 'userDisplayName', 'locationId', 'locationName',
+            'gameId', 'couponId', 'description', 'status', 'createdAt'
+          ]);
+
+      // Admin kan oppdatere status (bekrefte, kansellere)
+      allow update: if isLocationAdmin(resource.data.locationId)
+        && request.resource.data.status in ['confirmed', 'cancelled']
+        && request.resource.data.userId == resource.data.userId;
+
+      // Superadmin kan også oppdatere
+      allow update: if isSuperAdmin();
+
+      allow delete: if false;
+    }
+
+    // ============================================================
+    // Catch-all
+    // ============================================================
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

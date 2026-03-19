@@ -19,9 +19,11 @@ import { CommitmentsTable } from '@/components/admin/CommitmentsTable';
 import { SettingsPanel } from '@/components/admin/SettingsPanel';
 import { PlayerOverview } from '@/components/admin/PlayerOverview';
 import { QrCodeSection } from '@/components/admin/QrCodeSection';
+import { LocationStatsCard } from '@/components/admin/LocationStatsCard';
+import { Leaderboard } from '@/components/admin/Leaderboard';
 import type { Location, Game, BingoClaim, Coupon, GameStatus, WinCondition } from '@/types';
 
-type AdminTab = 'spill' | 'forpliktelser' | 'spillere' | 'innstillinger';
+type AdminTab = 'spill' | 'forpliktelser' | 'spillere' | 'statistikk' | 'innstillinger';
 
 export default function AdminPage() {
   const { locationId } = useParams<{ locationId: string }>();
@@ -399,7 +401,7 @@ export default function AdminPage() {
       {/* Tab navigation */}
       <div className="bg-white border-b border-gray-100">
         <div className="mx-auto max-w-2xl flex">
-          {([['spill', 'Spill'], ['forpliktelser', 'Forpliktelser'], ['spillere', 'Spillere'], ['innstillinger', 'Innstillinger']] as [AdminTab, string][]).map(([tab, label]) => (
+          {([['spill', 'Spill'], ['forpliktelser', 'Forpliktelser'], ['spillere', 'Spillere'], ['statistikk', 'Statistikk'], ['innstillinger', 'Innstillinger']] as [AdminTab, string][]).map(([tab, label]) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -430,6 +432,16 @@ export default function AdminPage() {
         {/* Players tab */}
         {activeTab === 'spillere' && locationId && (
           <PlayerOverview locationId={locationId} />
+        )}
+
+        {/* Statistics tab */}
+        {activeTab === 'statistikk' && locationId && (
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold text-gray-900">Lokasjonsstatistikk</h2>
+            <LocationStatsCard locationId={locationId} />
+            <h2 className="text-lg font-semibold text-gray-900 mt-6">Toppliste</h2>
+            <Leaderboard locationId={locationId} />
+          </div>
         )}
 
         {/* Settings tab */}

@@ -125,6 +125,20 @@ service cloud.firestore {
       allow update: if isLocationAdmin(locationId);
       allow delete: if isSuperAdmin();
 
+      // ─── Location meta (stats — written by Cloud Functions) ──
+
+      match /meta/{docId} {
+        allow read: if isAuthenticated();
+        allow write: if false; // Only Cloud Functions write stats
+      }
+
+      // ─── Leaderboard (written by Cloud Functions) ─────────
+
+      match /leaderboard/{userId} {
+        allow read: if isAuthenticated();
+        allow write: if false; // Only Cloud Functions update leaderboard
+      }
+
       // ─── Games ───────────────────────────────────────────
 
       match /games/{gameId} {

@@ -163,5 +163,27 @@ export interface Commitment {
   createdAt: Timestamp;
 }
 
+// ─── Location statistics ─────────────────────────────────
+export interface LocationStats {
+  totalGames: number;
+  totalCoupons: number;
+  totalWinners: number;
+  totalPlayers: number;
+  averagePlayersPerGame: number;
+  averageCouponsPerGame: number;
+  lastGameAt: Timestamp | null;
+  updatedAt: Timestamp;
+}
+
+// ─── Leaderboard ─────────────────────────────────────────
+export interface LeaderboardEntry {
+  userId: string;
+  displayName: string;
+  wins: number;
+  gamesPlayed: number;
+  lastWinAt: Timestamp | null;
+  updatedAt: Timestamp;
+}
+
 // Re-export grid constants from the canonical source
 export { GRID_SIZE } from '@/utils/constants';

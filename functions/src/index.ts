@@ -280,6 +280,202 @@ export const onPaymentConfirmed = onDocumentUpdated(
   }
 );
 
+// ─── CF-012: Aggregated location statistics ─────────────
+
+/**
+ * When a game status changes to 'finished', update location-level stats.
+ * Also updates when game opens (to count total games).
+ */
+export const onGameStatsUpdate = onDocumentUpdated(
+  'locations/{locationId}/games/{gameId}',
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!before || !after) return;
+
+    const { locationId } = event.params;
+
+    // Only compute stats when game finishes
+    if (before.status === after.status || after.status !== 'finished') return;
+
+    try {
+      // Query all finished games for this location
+      const gamesSnap = await db
+        .collection(`locations/${locationId}/games`)
+        .where('status', '==', 'finished')
+        .get();
+
+      let totalCoupons = 0;
+      let totalWinners = 0;
+      let totalPlayers = 0;
+      let lastGameAt: FirebaseFirestore.Timestamp | null = null;
+
+      for (const gameDoc of gamesSnap.docs) {
+        const game = gameDoc.data();
+        totalCoupons += game.couponCount ?? 0;
+        totalWinners += game.winners?.length ?? 0;
+        totalPlayers += game.playerCount ?? 0;
+
+        const finishedAt = game.finishedAt as FirebaseFirestore.Timestamp | null;
+        if (finishedAt && (!lastGameAt || finishedAt.toMillis() > lastGameAt.toMillis())) {
+          lastGameAt = finishedAt;
+        }
+      }
+
+      const totalGames = gamesSnap.size;
+      const statsRef = db.doc(`locations/${locationId}/meta/stats`);
+
+      await statsRef.set({
+        totalGames,
+        totalCoupons,
+        totalWinners,
+        totalPlayers,
+        averagePlayersPerGame: totalGames > 0 ? Math.round(totalPlayers / totalGames) : 0,
+        averageCouponsPerGame: totalGames > 0 ? Math.round(totalCoupons / totalGames) : 0,
+        lastGameAt,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      logger.info('Updated location stats', { locationId, totalGames, totalCoupons });
+    } catch (error) {
+      logger.error('Failed to update location stats', { locationId, error });
+    }
+  }
+);
+
+// ─── CF-013: Player leaderboard ─────────────────────────
+
+/**
+ * When a game's winners array changes, update the leaderboard
+ * for the location. Also increments gamesPlayed for all coupon owners.
+ */
+export const onWinnerLeaderboardUpdate = onDocumentUpdated(
+  'locations/{locationId}/games/{gameId}',
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!before || !after) return;
+
+    const { locationId, gameId } = event.params;
+    const beforeWinners = before.winners ?? [];
+    const afterWinners = after.winners ?? [];
+
+    // Check if winners were added
+    if (afterWinners.length <= beforeWinners.length) return;
+
+    const newWinners = afterWinners.slice(beforeWinners.length) as Array<{
+      userId: string;
+      displayName: string;
+      couponId: string;
+      winCondition: string;
+    }>;
+
+    try {
+      for (const winner of newWinners) {
+        const leaderboardRef = db.doc(
+          `locations/${locationId}/leaderboard/${winner.userId}`
+        );
+
+        const existing = await leaderboardRef.get();
+
+        if (existing.exists) {
+          await leaderboardRef.update({
+            wins: FieldValue.increment(1),
+            displayName: winner.displayName,
+            lastWinAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        } else {
+          await leaderboardRef.set({
+            userId: winner.userId,
+            displayName: winner.displayName,
+            wins: 1,
+            gamesPlayed: 0,
+            lastWinAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        }
+      }
+
+      logger.info('Updated leaderboard', {
+        locationId,
+        gameId,
+        newWinners: newWinners.length,
+      });
+    } catch (error) {
+      logger.error('Failed to update leaderboard', { locationId, error });
+    }
+  }
+);
+
+/**
+ * When a game finishes, increment gamesPlayed for all participants.
+ */
+export const onGameFinishedUpdateLeaderboard = onDocumentUpdated(
+  'locations/{locationId}/games/{gameId}',
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!before || !after) return;
+
+    if (before.status === after.status || after.status !== 'finished') return;
+
+    const { locationId, gameId } = event.params;
+
+    try {
+      // Get all coupons for this game to find unique players
+      const couponsSnap = await db
+        .collection(`locations/${locationId}/games/${gameId}/coupons`)
+        .get();
+
+      const playerIds = new Set<string>();
+      const playerNames = new Map<string, string>();
+
+      for (const couponDoc of couponsSnap.docs) {
+        const coupon = couponDoc.data();
+        playerIds.add(coupon.userId);
+        playerNames.set(coupon.userId, coupon.userDisplayName);
+      }
+
+      // Batch update gamesPlayed for each participant
+      const batch = db.batch();
+      for (const userId of playerIds) {
+        const leaderboardRef = db.doc(
+          `locations/${locationId}/leaderboard/${userId}`
+        );
+
+        const existing = await leaderboardRef.get();
+        if (existing.exists) {
+          batch.update(leaderboardRef, {
+            gamesPlayed: FieldValue.increment(1),
+            displayName: playerNames.get(userId) ?? 'Ukjent',
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        } else {
+          batch.set(leaderboardRef, {
+            userId,
+            displayName: playerNames.get(userId) ?? 'Ukjent',
+            wins: 0,
+            gamesPlayed: 1,
+            lastWinAt: null,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        }
+      }
+
+      await batch.commit();
+
+      logger.info('Updated gamesPlayed for participants', {
+        locationId,
+        gameId,
+        playerCount: playerIds.size,
+      });
+    } catch (error) {
+      logger.error('Failed to update gamesPlayed', { locationId, error });
+    }
+  }
+);
+
 // ─── #13: Automatic winner approval ─────────────────────
 // When server-side validation confirms a bingo claim is valid,
 // automatically approve it without admin intervention.

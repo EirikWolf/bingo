@@ -9,7 +9,7 @@ import {
   type CollectionReference,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Location, Game, Coupon, BingoClaim, Commitment, User } from '@/types';
+import type { Location, Game, Coupon, BingoClaim, Commitment, User, LocationStats, LeaderboardEntry } from '@/types';
 
 // ─── Document references ─────────────────────────────────
 
@@ -226,6 +226,43 @@ export function listenToAllUsers(
     callback(users);
   }, (error) => {
     console.error('listenToAllUsers error:', error);
+    callback([]);
+  });
+}
+
+// ─── Location stats (updated by Cloud Function) ─────────
+
+export function listenToLocationStats(
+  locationId: string,
+  callback: (stats: LocationStats | null) => void
+): () => void {
+  return onSnapshot(
+    doc(db, 'locations', locationId, 'meta', 'stats'),
+    (snap) => {
+      callback(snap.exists() ? (snap.data() as LocationStats) : null);
+    },
+    (error) => {
+      console.error('listenToLocationStats error:', error);
+      callback(null);
+    }
+  );
+}
+
+// ─── Leaderboard (updated by Cloud Function) ─────────────
+
+export function listenToLeaderboard(
+  locationId: string,
+  callback: (entries: LeaderboardEntry[]) => void
+): () => void {
+  const q = query(
+    collection(db, 'locations', locationId, 'leaderboard'),
+    orderBy('wins', 'desc')
+  );
+  return onSnapshot(q, (snap) => {
+    const entries = snap.docs.map((d) => ({ ...d.data() }) as LeaderboardEntry);
+    callback(entries);
+  }, (error) => {
+    console.error('listenToLeaderboard error:', error);
     callback([]);
   });
 }

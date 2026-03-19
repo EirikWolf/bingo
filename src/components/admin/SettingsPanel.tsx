@@ -19,21 +19,16 @@ export function SettingsPanel({ location, locationId }: SettingsPanelProps) {
   const [pricePerCoupon, setPricePerCoupon] = useState(s.couponPricing?.pricePerCoupon?.toString() ?? '');
   const [defaultCommitment, setDefaultCommitment] = useState(s.defaultCommitment);
   const [maxCoupons, setMaxCoupons] = useState(s.maxCouponsPerPlayer.toString());
-  const [autoDrawInterval, setAutoDrawInterval] = useState((s.autoDrawIntervalMs / 1000).toString());
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   function validate(): boolean {
     const errs: Record<string, string> = {};
     const maxCouponsNum = Number(maxCoupons);
-    const intervalNum = Number(autoDrawInterval);
     const amountNum = vippsAmount ? Number(vippsAmount) : null;
 
     if (maxCoupons !== '' && (isNaN(maxCouponsNum) || maxCouponsNum < 0)) {
       errs.maxCoupons = 'Må være 0 eller høyere';
-    }
-    if (isNaN(intervalNum) || intervalNum < 3 || intervalNum > 30) {
-      errs.autoDrawInterval = 'Må være mellom 3 og 30 sekunder';
     }
     if (amountNum !== null && (isNaN(amountNum) || amountNum < 0)) {
       errs.vippsAmount = 'Må være et positivt tall';
@@ -61,7 +56,6 @@ export function SettingsPanel({ location, locationId }: SettingsPanelProps) {
           : null,
         defaultCommitment,
         maxCouponsPerPlayer: Number(maxCoupons) || 0,
-        autoDrawIntervalMs: (Number(autoDrawInterval) || 5) * 1000,
       });
       toast.success('Innstillinger lagret');
     } catch (error) {
@@ -182,21 +176,6 @@ export function SettingsPanel({ location, locationId }: SettingsPanelProps) {
               className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none ${errors.maxCoupons ? 'border-red-300' : 'border-gray-300 focus:border-bingo-500'}`}
             />
             {errors.maxCoupons && <p className="text-xs text-red-500 mt-1">{errors.maxCoupons}</p>}
-          </div>
-          <div>
-            <label htmlFor="draw-interval" className="block text-sm text-gray-600 mb-1">
-              Auto-trekning intervall (sekunder)
-            </label>
-            <input
-              id="draw-interval"
-              type="number"
-              min="3"
-              max="30"
-              value={autoDrawInterval}
-              onChange={(e) => { setAutoDrawInterval(e.target.value); if (errors.autoDrawInterval) setErrors((p) => { const n = { ...p }; delete n.autoDrawInterval; return n; }); }}
-              className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none ${errors.autoDrawInterval ? 'border-red-300' : 'border-gray-300 focus:border-bingo-500'}`}
-            />
-            {errors.autoDrawInterval && <p className="text-xs text-red-500 mt-1">{errors.autoDrawInterval}</p>}
           </div>
         </div>
       </Card>

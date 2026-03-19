@@ -39,7 +39,7 @@ export default function AdminPage() {
   // Game creation state
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newPaymentType, setNewPaymentType] = useState<'commitment' | 'vipps'>('commitment');
-  const [newCommitment, setNewCommitment] = useState('1 time dugnad per kupong');
+  const [newCommitment, setNewCommitment] = useState('');
   const [newWinConditions, setNewWinConditions] = useState<WinCondition[]>(['row', 'column', 'diagonal']);
   const [creating, setCreating] = useState(false);
 
@@ -125,7 +125,10 @@ export default function AdminPage() {
     if (location?.settings.autoDrawIntervalMs) {
       setAutoDrawInterval(location.settings.autoDrawIntervalMs / 1000);
     }
-  }, [location?.settings.speech, location?.settings.autoDrawIntervalMs]);
+    if (location?.settings.defaultCommitment) {
+      setNewCommitment(location.settings.defaultCommitment);
+    }
+  }, [location?.settings.speech, location?.settings.autoDrawIntervalMs, location?.settings.defaultCommitment]);
 
   // Listen to location
   useEffect(() => {
@@ -587,30 +590,6 @@ export default function AdminPage() {
               </Button>
             </div>
 
-            {/* Auto-draw interval slider */}
-            <div className="mt-4">
-              <div className="flex items-center justify-between text-sm">
-                <label htmlFor="draw-interval" className="text-gray-600">
-                  Trekkintervall
-                </label>
-                <span className="font-medium text-gray-900">{autoDrawInterval}s</span>
-              </div>
-              <input
-                id="draw-interval"
-                type="range"
-                min="3"
-                max="20"
-                step="1"
-                value={autoDrawInterval}
-                onChange={(e) => setAutoDrawInterval(Number(e.target.value))}
-                className="mt-1 w-full accent-bingo-600"
-              />
-              <div className="flex justify-between text-xs text-gray-400">
-                <span>3s</span>
-                <span>20s</span>
-              </div>
-            </div>
-
             {/* Recent draws */}
             {game.drawnNumbers.length > 0 && (
               <div className="mt-4">
@@ -954,6 +933,30 @@ export default function AdminPage() {
               </div>
             </div>
 
+            {/* Auto-draw interval slider */}
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <div className="flex items-center justify-between text-sm">
+                <label htmlFor="draw-interval" className="text-gray-600">
+                  Auto-trekning intervall
+                </label>
+                <span className="font-medium text-gray-900">{autoDrawInterval}s</span>
+              </div>
+              <input
+                id="draw-interval"
+                type="range"
+                min="3"
+                max="30"
+                step="1"
+                value={autoDrawInterval}
+                onChange={(e) => setAutoDrawInterval(Number(e.target.value))}
+                className="mt-1 w-full accent-bingo-600"
+              />
+              <div className="flex justify-between text-xs text-gray-400">
+                <span>3s</span>
+                <span>30s</span>
+              </div>
+            </div>
+
             {!bingoSpeech.isAvailable() && (
               <p className="mt-2 text-xs text-red-500">
                 Nettleseren støtter ikke tale-syntetisering.
@@ -1062,7 +1065,7 @@ export default function AdminPage() {
                 value={newCommitment}
                 onChange={(e) => setNewCommitment(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-bingo-500 focus:outline-none focus:ring-1 focus:ring-bingo-500"
-                placeholder="F.eks. 1 time dugnad per kupong"
+                placeholder={location?.settings.defaultCommitment || 'F.eks. 1 time dugnad per kupong'}
               />
             </div>
           )}

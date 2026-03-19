@@ -186,10 +186,24 @@ export default function BigScreenPage() {
 
       {/* Game open state */}
       {game && game.status === 'open' && (
-        <div className="flex flex-col items-center justify-center py-20">
+        <div className="flex flex-col items-center justify-center py-12">
           <p className="text-3xl font-bold text-bingo-200">Åpent for kupongkjøp!</p>
           <p className="mt-4 text-xl text-bingo-400">{game.couponCount} kuponger kjøpt</p>
           <p className="mt-2 text-bingo-400">Forpliktelse: {game.commitment}</p>
+
+          {/* QR code to join */}
+          <div className="mt-8 flex flex-col items-center">
+            <div className="rounded-2xl bg-white p-4">
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`https://bingoportalen.web.app/spill/${locationId}`)}`}
+                alt="QR-kode for å bli med"
+                width={200}
+                height={200}
+              />
+            </div>
+            <p className="mt-3 text-sm text-bingo-300">Skann for å bli med</p>
+            <p className="text-xs text-bingo-400 mt-1">bingoportalen.web.app</p>
+          </div>
         </div>
       )}
 

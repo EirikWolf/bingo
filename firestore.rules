@@ -122,7 +122,11 @@ service cloud.firestore {
     match /locations/{locationId} {
       allow read: if isAuthenticated();
       allow create: if isSuperAdmin();
-      allow update: if isLocationAdmin(locationId);
+      allow update: if isLocationAdmin(locationId)
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['adminUids'])
+          || request.resource.data.adminUids[0] == resource.data.adminUids[0]
+        );
       allow delete: if isSuperAdmin();
 
       // ─── Location meta (stats — written by Cloud Functions) ──

@@ -5,6 +5,7 @@ import {
   addDoc,
   setDoc,
   arrayUnion,
+  arrayRemove,
   serverTimestamp,
   increment,
   collection,
@@ -393,4 +394,30 @@ export async function updateLocationSettings(
     updates[`settings.${key}`] = value;
   }
   await updateDoc(locationRef(locationId), updates);
+}
+
+// ─── Admin management ──────────────────────────────────────
+
+export async function addLocationAdmin(
+  locationId: string,
+  uid: string
+): Promise<void> {
+  await updateDoc(locationRef(locationId), {
+    adminUids: arrayUnion(uid),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function removeLocationAdmin(
+  locationId: string,
+  uid: string,
+  creatorUid: string
+): Promise<void> {
+  if (uid === creatorUid) {
+    throw new Error('Kan ikke fjerne oppretter av lokasjonen');
+  }
+  await updateDoc(locationRef(locationId), {
+    adminUids: arrayRemove(uid),
+    updatedAt: serverTimestamp(),
+  });
 }

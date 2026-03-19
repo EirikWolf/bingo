@@ -1,16 +1,19 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { updateLocationSettings } from '@/services/actions';
+import { updateLocationSettings, addLocationAdmin, removeLocationAdmin } from '@/services/actions';
+import { fetchUsersByUids, listenToLeaderboard } from '@/services/firestore';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import type { Location } from '@/types';
+import { Badge } from '@/components/ui/Badge';
+import type { Location, User, LeaderboardEntry } from '@/types';
 
 interface SettingsPanelProps {
   location: Location;
   locationId: string;
+  currentUserId: string;
 }
 
-export function SettingsPanel({ location, locationId }: SettingsPanelProps) {
+export function SettingsPanel({ location, locationId, currentUserId }: SettingsPanelProps) {
   const s = location.settings;
 
   const [vippsNumber, setVippsNumber] = useState(s.vippsNumber ?? '');
@@ -21,6 +24,57 @@ export function SettingsPanel({ location, locationId }: SettingsPanelProps) {
   const [maxCoupons, setMaxCoupons] = useState(s.maxCouponsPerPlayer.toString());
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Admin management state
+  const [adminUsers, setAdminUsers] = useState<User[]>([]);
+  const [leaderboardPlayers, setLeaderboardPlayers] = useState<LeaderboardEntry[]>([]);
+  const [addingUid, setAddingUid] = useState<string | null>(null);
+  const [removingUid, setRemovingUid] = useState<string | null>(null);
+  const [confirmRemoveUid, setConfirmRemoveUid] = useState<string | null>(null);
+
+  const creatorUid = location.adminUids[0] ?? '';
+
+  // Fetch admin user profiles
+  useEffect(() => {
+    if (location.adminUids.length === 0) return;
+    fetchUsersByUids(location.adminUids).then(setAdminUsers).catch(console.error);
+  }, [location.adminUids]);
+
+  // Listen to leaderboard for promotable players
+  useEffect(() => {
+    return listenToLeaderboard(locationId, setLeaderboardPlayers);
+  }, [locationId]);
+
+  const promotablePlayers = leaderboardPlayers.filter(
+    (p) => !location.adminUids.includes(p.userId)
+  );
+
+  async function handleAddAdmin(uid: string, displayName: string) {
+    setAddingUid(uid);
+    try {
+      await addLocationAdmin(locationId, uid);
+      toast.success(`${displayName} er nå administrator`);
+    } catch (error) {
+      console.error('Add admin error:', error);
+      toast.error('Kunne ikke legge til administrator');
+    } finally {
+      setAddingUid(null);
+    }
+  }
+
+  async function handleRemoveAdmin(uid: string, displayName: string) {
+    setRemovingUid(uid);
+    try {
+      await removeLocationAdmin(locationId, uid, creatorUid);
+      toast.success(`${displayName} er fjernet som administrator`);
+    } catch (error) {
+      console.error('Remove admin error:', error);
+      toast.error(error instanceof Error ? error.message : 'Kunne ikke fjerne administrator');
+    } finally {
+      setRemovingUid(null);
+      setConfirmRemoveUid(null);
+    }
+  }
 
   function validate(): boolean {
     const errs: Record<string, string> = {};
@@ -68,6 +122,100 @@ export function SettingsPanel({ location, locationId }: SettingsPanelProps) {
 
   return (
     <div className="space-y-4">
+      {/* Admin management */}
+      <Card>
+        <h3 className="text-base font-semibold text-gray-900 mb-3">Administratorer</h3>
+
+        {/* Current admins */}
+        <div className="space-y-2 mb-4">
+          {adminUsers.map((admin) => {
+            const isCreator = admin.uid === creatorUid;
+            const isSelf = admin.uid === currentUserId;
+            return (
+              <div
+                key={admin.uid}
+                className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-bingo-100 text-sm font-bold text-bingo-700">
+                    {admin.displayName.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">
+                      {admin.displayName}
+                      {isSelf && <span className="text-gray-400 ml-1">(deg)</span>}
+                    </p>
+                    <p className="text-xs text-gray-400">{admin.email}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {isCreator ? (
+                    <Badge variant="info">Oppretter</Badge>
+                  ) : confirmRemoveUid === admin.uid ? (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleRemoveAdmin(admin.uid, admin.displayName)}
+                        disabled={removingUid === admin.uid}
+                        className="text-xs text-red-600 font-medium hover:underline"
+                      >
+                        {removingUid === admin.uid ? 'Fjerner...' : 'Bekreft'}
+                      </button>
+                      <button
+                        onClick={() => setConfirmRemoveUid(null)}
+                        className="text-xs text-gray-400 hover:underline"
+                      >
+                        Avbryt
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmRemoveUid(admin.uid)}
+                      className="text-xs text-red-500 hover:underline"
+                    >
+                      Fjern
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Add admin from leaderboard */}
+        {promotablePlayers.length > 0 ? (
+          <div>
+            <p className="text-sm text-gray-600 mb-2">Legg til administrator</p>
+            <div className="space-y-1 max-h-48 overflow-y-auto">
+              {promotablePlayers.map((player) => (
+                <div
+                  key={player.userId}
+                  className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-xs font-bold text-gray-600">
+                      {player.displayName.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="text-sm text-gray-700">{player.displayName}</span>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    loading={addingUid === player.userId}
+                    onClick={() => handleAddAdmin(player.userId, player.displayName)}
+                  >
+                    Legg til
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-gray-400">
+            Ingen spillere å legge til. Spillere vises her etter at de har deltatt i et spill.
+          </p>
+        )}
+      </Card>
+
       {/* Vipps settings */}
       <Card>
         <h3 className="text-base font-semibold text-gray-900 mb-3">Vipps</h3>

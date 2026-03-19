@@ -1,25 +1,33 @@
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { useAuthStore } from '@/stores/authStore';
 import { listenToLocation, listenToGame } from '@/services/firestore';
+import { drawNumber, updateAutoDrawState } from '@/services/actions';
 import { BigNumber } from '@/components/bigscreen/BigNumber';
 import { NumberBoard } from '@/components/bigscreen/NumberBoard';
 import { WinnerAnnouncement } from '@/components/bigscreen/WinnerAnnouncement';
 import { Spinner } from '@/components/ui/Spinner';
-import { GAME_STATUS_LABELS } from '@/utils/constants';
+import { GAME_STATUS_LABELS, TOTAL_NUMBERS } from '@/utils/constants';
 import { bingoSpeech } from '@/utils/speech';
 import { celebrateBigScreen } from '@/utils/effects';
 import type { Location, Game } from '@/types';
 
 export default function BigScreenPage() {
   const { locationId } = useParams<{ locationId: string }>();
+  const user = useAuthStore((s) => s.user);
   const [location, setLocation] = useState<Location | null>(null);
   const [game, setGame] = useState<Game | null>(null);
   const [loading, setLoading] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [countdown, setCountdown] = useState(0);
+  const [drawing, setDrawing] = useState(false);
+  const [showControls, setShowControls] = useState(true);
 
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevCurrentNumberRef = useRef<number | null>(null);
+
+  const isAdmin = user?.uid ? (location?.adminUids.includes(user.uid) ?? false) : false;
 
   // Listen to location
   useEffect(() => {
@@ -128,6 +136,40 @@ export default function BigScreenPage() {
     }
     prevWinnersCountRef.current = count;
   }, [game?.winners.length]);
+
+  // Available numbers for draw
+  const availableNumbers = useMemo(() => {
+    const drawn = new Set(game?.drawnNumbers ?? []);
+    return Array.from({ length: TOTAL_NUMBERS }, (_, i) => i + 1).filter((n) => !drawn.has(n));
+  }, [game?.drawnNumbers]);
+
+  const autoDrawInterval = (game?.autoDrawIntervalMs ?? 5000) / 1000;
+
+  const handleDraw = useCallback(async () => {
+    if (!locationId || !game || availableNumbers.length === 0 || drawing) return;
+    const randomIndex = Math.floor(Math.random() * availableNumbers.length);
+    const number = availableNumbers[randomIndex]!;
+    setDrawing(true);
+    try {
+      await drawNumber(locationId, game.id, number);
+    } catch (error) {
+      console.error('Draw error:', error);
+      toast.error('Kunne ikke trekke tall');
+    } finally {
+      setDrawing(false);
+    }
+  }, [locationId, game, availableNumbers, drawing]);
+
+  async function handleStartAutoDraw() {
+    if (!locationId || !game) return;
+    await updateAutoDrawState(locationId, game.id, true, autoDrawInterval * 1000);
+    handleDraw();
+  }
+
+  async function handlePauseAutoDraw() {
+    if (!locationId || !game) return;
+    await updateAutoDrawState(locationId, game.id, false, autoDrawInterval * 1000);
+  }
 
   // Cleanup speech on unmount
   useEffect(() => {
@@ -295,6 +337,59 @@ export default function BigScreenPage() {
         <div className="flex flex-col items-center justify-center py-20">
           <p className="text-2xl text-bingo-300">Spillet er avsluttet</p>
           <p className="mt-2 text-bingo-400">{game.drawnNumbers.length} tall ble trukket</p>
+        </div>
+      )}
+
+      {/* Admin draw controls — fixed bottom-left */}
+      {isAdmin && game && game.status === 'active' && (
+        <div className="fixed bottom-6 left-6 z-50">
+          {showControls ? (
+            <div className="flex items-center gap-2 rounded-2xl bg-black/70 backdrop-blur-sm px-4 py-3 shadow-lg border border-white/10">
+              {game.autoDrawActive ? (
+                <button
+                  onClick={handlePauseAutoDraw}
+                  className="flex items-center gap-2 rounded-xl bg-yellow-500 hover:bg-yellow-400 text-black font-semibold px-5 py-2.5 text-sm transition-colors"
+                >
+                  <span className="text-lg">⏸</span> Pause
+                </button>
+              ) : (
+                <button
+                  onClick={handleStartAutoDraw}
+                  disabled={availableNumbers.length === 0}
+                  className="flex items-center gap-2 rounded-xl bg-green-500 hover:bg-green-400 disabled:opacity-40 text-white font-semibold px-5 py-2.5 text-sm transition-colors"
+                >
+                  <span className="text-lg">▶</span> Start
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  handleDraw();
+                  if (game.autoDrawActive) {
+                    // Reset countdown visual after manual draw
+                  }
+                }}
+                disabled={drawing || availableNumbers.length === 0}
+                className="flex items-center gap-2 rounded-xl bg-bingo-600 hover:bg-bingo-500 disabled:opacity-40 text-white font-semibold px-5 py-2.5 text-sm transition-colors"
+              >
+                <span className="text-lg">⏭</span> Neste
+              </button>
+              <button
+                onClick={() => setShowControls(false)}
+                className="ml-1 rounded-lg p-1.5 text-white/40 hover:text-white/80 hover:bg-white/10 transition-colors"
+                title="Skjul kontroller"
+              >
+                ✕
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowControls(true)}
+              className="rounded-full bg-black/50 backdrop-blur-sm p-3 text-white/60 hover:text-white hover:bg-black/70 transition-colors border border-white/10 shadow-lg"
+              title="Vis kontroller"
+            >
+              🎮
+            </button>
+          )}
         </div>
       )}
     </div>

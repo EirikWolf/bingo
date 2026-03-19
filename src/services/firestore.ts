@@ -5,6 +5,7 @@ import {
   where,
   orderBy,
   onSnapshot,
+  getDoc,
   type DocumentReference,
   type CollectionReference,
 } from 'firebase/firestore';
@@ -228,6 +229,21 @@ export function listenToAllUsers(
     console.error('listenToAllUsers error:', error);
     callback([]);
   });
+}
+
+// ─── Fetch users by UIDs ─────────────────────────────────
+
+export async function fetchUsersByUids(uids: string[]): Promise<User[]> {
+  const results = await Promise.all(
+    uids.map(async (uid) => {
+      const snap = await getDoc(userRef(uid));
+      if (snap.exists()) {
+        return { ...snap.data(), uid: snap.id } as User;
+      }
+      return { uid, displayName: uid, email: '', role: 'player', createdAt: null } as unknown as User;
+    })
+  );
+  return results;
 }
 
 // ─── Location stats (updated by Cloud Function) ─────────

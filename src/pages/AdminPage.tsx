@@ -449,7 +449,7 @@ export default function AdminPage() {
 
         {/* Settings tab */}
         {activeTab === 'innstillinger' && locationId && (
-          <SettingsPanel location={location} locationId={locationId} />
+          <SettingsPanel location={location} locationId={locationId} currentUserId={user?.uid ?? ''} />
         )}
 
         {/* Game tab */}

@@ -33,7 +33,7 @@ export function BingoButton({ enabled, loading = false, onClick, remaining }: Bi
       </motion.div>
       {!enabled && remaining > 0 && (
         <p className="text-xs text-gray-400">
-          {remaining} {remaining === 1 ? 'tall' : 'tall'} igjen til naermeste gevinst
+          {remaining} tall igjen til nærmeste gevinst
         </p>
       )}
     </div>

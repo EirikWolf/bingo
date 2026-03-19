@@ -138,93 +138,45 @@ export const bingoSpeech = new BingoSpeech();
 
 // ─── Background music ────────────────────────────────────
 
-class BackgroundMusic {
-  private audioContext: AudioContext | null = null;
-  private gainNode: GainNode | null = null;
-  private oscillators: OscillatorNode[] = [];
-  private playing = false;
-  private interval: ReturnType<typeof setInterval> | null = null;
+const MUSIC_SRC = '/audio/background-music.mp3';
 
-  /** Start ambient background music (simple generative tones) */
-  start(volume = 0.08) {
+class BackgroundMusic {
+  private audio: HTMLAudioElement | null = null;
+  private playing = false;
+
+  /** Start background music from MP3 file */
+  start(volume = 0.15) {
     if (this.playing) return;
-    this.playing = true;
 
     try {
-      this.audioContext = new AudioContext();
-      this.gainNode = this.audioContext.createGain();
-      this.gainNode.gain.value = volume;
-      this.gainNode.connect(this.audioContext.destination);
-
-      this.playChord();
-      // Change chord every 4 seconds
-      this.interval = setInterval(() => this.playChord(), 4000);
+      if (!this.audio) {
+        this.audio = new Audio(MUSIC_SRC);
+        this.audio.loop = true;
+        this.audio.preload = 'auto';
+      }
+      this.audio.volume = Math.max(0, Math.min(1, volume));
+      this.audio.play().catch((err) => {
+        console.warn('Could not start background music:', err);
+      });
+      this.playing = true;
     } catch {
       this.playing = false;
     }
   }
 
-  private playChord() {
-    if (!this.audioContext || !this.gainNode) return;
-
-    // Stop previous oscillators
-    for (const osc of this.oscillators) {
-      try { osc.stop(); } catch { /* already stopped */ }
-    }
-    this.oscillators = [];
-
-    // Simple pleasant chord frequencies (C major, F major, G major, Am)
-    const chords = [
-      [261.63, 329.63, 392.00], // C major
-      [349.23, 440.00, 523.25], // F major
-      [392.00, 493.88, 587.33], // G major
-      [220.00, 261.63, 329.63], // A minor
-    ];
-
-    const chord = chords[Math.floor(Math.random() * chords.length)]!;
-
-    for (const freq of chord) {
-      const osc = this.audioContext.createOscillator();
-      osc.type = 'sine';
-      osc.frequency.value = freq;
-
-      const noteGain = this.audioContext.createGain();
-      noteGain.gain.value = 0;
-      // Fade in
-      noteGain.gain.linearRampToValueAtTime(0.3, this.audioContext.currentTime + 0.5);
-      // Fade out
-      noteGain.gain.linearRampToValueAtTime(0, this.audioContext.currentTime + 3.8);
-
-      osc.connect(noteGain);
-      noteGain.connect(this.gainNode);
-      osc.start();
-      osc.stop(this.audioContext.currentTime + 4);
-
-      this.oscillators.push(osc);
-    }
-  }
-
   /** Stop background music */
   stop() {
+    if (this.audio) {
+      this.audio.pause();
+      this.audio.currentTime = 0;
+    }
     this.playing = false;
-    if (this.interval) {
-      clearInterval(this.interval);
-      this.interval = null;
-    }
-    for (const osc of this.oscillators) {
-      try { osc.stop(); } catch { /* already stopped */ }
-    }
-    this.oscillators = [];
-    if (this.audioContext) {
-      this.audioContext.close().catch(() => {});
-      this.audioContext = null;
-    }
-    this.gainNode = null;
   }
 
+  /** Set playback volume (0.0 - 1.0) */
   setVolume(volume: number) {
-    if (this.gainNode) {
-      this.gainNode.gain.value = Math.max(0, Math.min(1, volume));
+    if (this.audio) {
+      this.audio.volume = Math.max(0, Math.min(1, volume));
     }
   }
 

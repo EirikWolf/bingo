@@ -64,7 +64,7 @@ export default function AdminPage() {
 
   // Background music
   const [musicPlaying, setMusicPlaying] = useState(false);
-  const [musicVolume, setMusicVolume] = useState(0.08);
+  const [musicVolume, setMusicVolume] = useState(0.15);
 
   // Track previous claims count for smart stop
   const prevClaimsCountRef = useRef(0);
@@ -842,27 +842,25 @@ export default function AdminPage() {
                   {musicPlaying ? '⏹ Stopp' : '♫ Spill'}
                 </Button>
               </div>
-              {musicPlaying && (
-                <div>
-                  <div className="flex items-center justify-between text-xs text-gray-500">
-                    <span>Volum</span>
-                    <span>{Math.round(musicVolume * 100)}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0.01"
-                    max="0.3"
-                    step="0.01"
-                    value={musicVolume}
-                    onChange={(e) => {
-                      const v = Number(e.target.value);
-                      setMusicVolume(v);
-                      backgroundMusic.setVolume(v);
-                    }}
-                    className="w-full accent-bingo-600"
-                  />
+              <div>
+                <div className="flex items-center justify-between text-xs text-gray-500">
+                  <span>Volum</span>
+                  <span>{Math.round(musicVolume * 100)}%</span>
                 </div>
-              )}
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={musicVolume}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setMusicVolume(v);
+                    backgroundMusic.setVolume(v);
+                  }}
+                  className="w-full accent-bingo-600"
+                />
+              </div>
             </div>
 
             {!bingoSpeech.isAvailable() && (

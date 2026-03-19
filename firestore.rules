@@ -108,10 +108,12 @@ service cloud.firestore {
         && request.resource.data.uid == userId
         && request.resource.data.keys().hasAll(['uid', 'displayName', 'email', 'role', 'createdAt']);
 
-      // Owner can update own fields except role
+      // Owner can update own fields except role, uid, email
       allow update: if isAuthenticated()
         && isOwner(userId)
-        && request.resource.data.role == resource.data.role;
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.email == resource.data.email;
 
       // Superadmin can update anything including role
       allow update: if isSuperAdmin();

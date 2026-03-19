@@ -63,7 +63,7 @@ export function SettingsPanel({ location, locationId }: SettingsPanelProps) {
           </div>
           <div>
             <label htmlFor="vipps-amount" className="block text-sm text-gray-600 mb-1">
-              Standardbelop (kr)
+              Standardbeløp (kr)
             </label>
             <input
               id="vipps-amount"

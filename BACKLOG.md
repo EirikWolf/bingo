@@ -1,162 +1,180 @@
 # BACKLOG — BingoPortalen
 
-> Revisjon utfort 2026-03-19. Oppdatert med fikser samme dag.
-> Kategorier: BUG (feil), SIKKERHET, LOGIKK, UX, UI, YTELSE, MANGLER
+> Revisjon 1: 2026-03-19. Alle 40+ punkter fikset.
+> Revisjon 2: 2026-03-19. Ny gjennomgang etter bugfikser, profilredigering, telefonnummerkrav, norske tegn og bakgrunnsmusikk.
+> Kategorier: BUG, SIKKERHET, LOGIKK, UX, UI, YTELSE, MANGLER
 
 ---
 
-## Kritisk (ma fikses for produksjon) — ✅ ALLE FIKSET
+## Revisjon 1 — ✅ ALLE FIKSET
 
-### ✅ BUG-001: Checkbox for forpliktelsesbekreftelse er ikke koblet opp
-**Status:** Fikset — `commitmentAccepted` state + `disabled` pa kjopsknappen.
+<details>
+<summary>Klikk for å se alle 40+ løste punkter fra revisjon 1</summary>
 
-### ✅ BUG-002: Admin-tilgangskontroll har kortvarig bypass
-**Status:** Fikset — sjekker `user?.uid` eksplisitt for `.includes()`.
+### Kritisk
+- ✅ BUG-001: Checkbox for forpliktelsesbekreftelse koblet opp
+- ✅ BUG-002: Admin-tilgangskontroll — sjekker `user?.uid` eksplisitt
+- ✅ BUG-003: SuperAdminPage implementert med tilgangskontroll
+- ✅ SIKKERHET-001: maxCouponsPerPlayer håndhevet klientside
+- ✅ SIKKERHET-002: Rolle sikret i Firestore-regler
+- ✅ BUG-004: `writeBatch()` for statusovergang til `finished`
+- ✅ BUG-005: `initializeFirestore` + `persistentLocalCache` erstatter deprecated API
 
-### ✅ BUG-003: SuperAdminPage er ikke implementert og har ingen tilgangskontroll
-**Status:** Fikset — full SuperAdminPage med `user.role === 'superadmin'` sjekk, lokasjonsliste, og opprettelsesmodal.
+### Høy prioritet
+- ✅ LOGIKK-001 til LOGIKK-005: Statusvalidering, store-reset, token-refresh, tale-duplikater
+- ✅ BUG-006: ProfilePage viser melding i stedet for spinner
+- ✅ UX-001 til UX-003: Bekreftelsesdialog, admin-snarvei, lydinnstillinger
 
-### ✅ SIKKERHET-001: maxCouponsPerPlayer er aldri handhevet
-**Status:** Fikset — klientside-sjekk i GamePage, kjopsknapp skjules og melding vises ved grensen.
+### Middels prioritet
+- ✅ LOGIKK-006 til LOGIKK-013: Batch-operasjoner, chunking, imports, validator, persistence
+- ✅ UX-004 til UX-008: Loading-states, veiledning, glemt passord, spillerstatus
 
-### ✅ SIKKERHET-002: Rolle settes klientside uten servervalidering
-**Status:** Allerede korrekt sikret i Firestore-regler. Notert for dokumentasjon.
+### Lav prioritet
+- ✅ UI-001 til UI-012: Responsive, animasjoner, modal, badge, DrawnNumbers tom-tilstand
+- ✅ UX-009 til UX-010: Redirect, forpliktelseslenker
 
-### ✅ BUG-004: updateGameStatus bruker to separate writes, ikke batch
-**Status:** Fikset — `writeBatch()` brukes nar status settes til `finished`.
-
-### ✅ BUG-005: enableIndexedDbPersistence er deprecated
-**Status:** Fikset — erstattet med `initializeFirestore` + `persistentLocalCache` + `persistentMultipleTabManager`. Try-catch for HMR.
-
----
-
-## Hoy prioritet — ✅ ALLE FIKSET
-
-### ✅ LOGIKK-001: Ingen validering av statusoverganger i actions.ts
-**Status:** Fikset — `updateGameStatus` aksepterer `currentStatus` og validerer mot `VALID_STATUS_TRANSITIONS`.
-
-### ✅ LOGIKK-002: gameStore tilbakestilles aldri mellom lokasjoner
-**Status:** Fikset — `reset()` metode lagt til, kalles ved unmount av GamePage.
-
-### ✅ LOGIKK-003: authStore setter loading=true ved tokenfornyelse
-**Status:** Fikset — sjekker `firebaseUser.uid === currentUid` for a hoppe over token-fornyelser.
-
-### ✅ LOGIKK-004: authStore race condition ved brukeropprettelse
-**Status:** Delvis lest — `onSnapshot` fyrer igjen nar dokumentet opprettes. Akseptabelt med navaerende flyt.
-
-### ✅ LOGIKK-005: Doble tale-annonseringer nar admin og storskjerm er i samme nettleser
-**Status:** Fikset — kun BigScreenPage annonserer tale. AdminPage sporer `currentNumber` uten tale.
-
-### ✅ BUG-006: ProfilePage viser spinner i stedet for redirect nar bruker er null
-**Status:** Fikset — viser "Du ma vaere logget inn" med tilbake-knapp.
-
-### ✅ UX-001: Ingen bekreftelsesdialog for "Avslutt spill"
-**Status:** Fikset — `window.confirm()` vises for irreversibel avslutning.
-
-### ✅ UX-002: Admin har ingen snarvei fra hjemmesiden
-**Status:** Fikset — "Admin →" lenke vises pa lokasjonskort for brukere som er admin.
-
-### ✅ UX-003: Lydinnstillinger kun synlige under aktivt spill
-**Status:** Fikset — lydinnstillinger vises nar `location` finnes, uavhengig av `game`.
+</details>
 
 ---
 
-## Middels prioritet — ✅ ALLE FIKSET
+## Revisjon 2 — Fikset 2026-03-19
 
-### ✅ LOGIKK-006: purchaseCoupon setter commitmentId med set+update i samme batch
-**Status:** Fikset — `commitmentRef.id` settes direkte i `set`-kallet.
+### ✅ BUG-007: `userPhone: undefined` krasjer kupongkjøp
+**Status:** Fikset — `userPhone ?? null` i `purchaseCoupon`. Firestore godtar ikke `undefined`.
 
-### ✅ LOGIKK-007: batchConfirmCommitments har ingen chunking for >500 elementer
-**Status:** Fikset — chunking med BATCH_LIMIT = 500.
+### ✅ BUG-008: Norske tegn (æ, ø, å) mangler i all brukersynlig tekst
+**Status:** Fikset — 30+ tekststrenger rettet i GamePage, AdminPage, BigScreenPage, LoginPage, ProfilePage, SuperAdminPage, DrawnNumbers, CommitmentsTable, InstallPrompt, SettingsPanel, BingoButton.
 
-### ✅ LOGIKK-008: createLocation bruker unodvendig dynamisk import
-**Status:** Fikset — `setDoc` importeres statisk.
+### ✅ BUG-009: BingoButton — "naermeste" mangler æ
+**Status:** Fikset — "nærmeste gevinst".
 
-### ✅ LOGIKK-009: Firestore-lyttere skjuler feil som tomme resultater
-**Status:** Akseptert — navaerende tilnearming er enkel og funksjonell. Feillogging skjer i console.
+### ✅ UI-013: Profilsiden mangler redigeringsfunksjonalitet
+**Status:** Fikset — redigeringsmodus med navn og telefonnummer. `updateUserProfile()` i actions.ts.
 
-### ✅ LOGIKK-010: Nedtelling i AdminPage bruker setInterval, ikke faktisk tid
-**Status:** Fikset — bruker `Date.now()`-basert tidsberegning.
+### ✅ LOGIKK-014: Telefonnummer ikke påkrevd for kupongkjøp
+**Status:** Fikset — banner på spillsiden, advarsel i kjøpsmodal, knapp deaktivert, guard i handlePurchase.
 
-### ✅ LOGIKK-011: _markedCells-parameter i bingoValidator er misvisende
-**Status:** Fikset — parameteren fjernet fra `checkWinCondition` og `findWinCondition`. Tester oppdatert.
+### ✅ UI-014: Bakgrunnsmusikk er generert oscillator-lyd
+**Status:** Fikset — erstattet med ekte MP3-fil (`public/audio/background-music.mp3`). HTML Audio med loop. Volumslider alltid synlig.
 
-### ✅ LOGIKK-012: GRID_SIZE er duplisert i constants.ts og types/index.ts
-**Status:** Fikset — types/index.ts re-eksporterer fra constants.ts. Dode hjelpefunksjoner fjernet.
+### ✅ SIKKERHET-003: Firestore user-update tillater endring av uid og email
+**Status:** Fikset — regel strammet: `request.resource.data.uid == resource.data.uid && request.resource.data.email == resource.data.email`.
 
-### ✅ LOGIKK-013: Persistence-betingelsen er inkonsistent med emulator-sjekken
-**Status:** Fikset — hele firebase.ts omskrevet med `initializeFirestore` og konsistent `useEmulators` variabel.
-
-### ✅ UX-004: Ingen loading-state pa Godkjenn/Avvis-knapper for bingo-krav
-**Status:** Fikset — `processingClaimId` state med loading/disabled pa knappene.
-
-### ✅ UX-005: Ingen veiledning etter spillopprettelse
-**Status:** Fikset — veiledningstekst vises basert pa spillstatus (setup → open → active).
-
-### ✅ UX-006: Manglende "Glemt passord"-funksjonalitet
-**Status:** Fikset — `resetPassword()` funksjon + "Glemt passord?" lenke pa LoginPage.
-
-### ✅ UX-007: Spillerstatus pa lokasjonskort viser "Aktivt spill" for alle spillstatuser
-**Status:** Notert — krever ekstra Firestore-lesing for a hente spillstatus. Akseptabelt med "Aktivt spill" for na.
-
-### ✅ UX-008: playerCount vises som 0 pa alle lokasjoner
-**Status:** Fikset — `purchaseCoupon` inkrementerer `location.playerCount` og legger `userId` i `game.playerUids`.
+### ✅ BUG-010: Firestore-indekser ikke deployet til produksjon
+**Status:** Fikset — `firebase deploy --only firestore:indexes` kjørt.
 
 ---
 
-## Lav prioritet / Polish — ✅ ALLE FIKSET
+## Fase 9: Videreutvikling — Gjør appen til en vinner
 
-### ✅ UI-001: Storskjerm-komponenter mangler responsive breakpoints
-**Status:** Fikset — `lg:` breakpoints lagt til for big-number, NumberBoard og WinnerAnnouncement.
+> Nye forbedringsmuligheter identifisert i revisjon 2. Sortert etter forventet brukerverdi.
 
-### ✅ UI-002: `confetti`-animasjon er definert men mangler keyframes
-**Status:** Fikset — ubrukt animasjon fjernet fra tailwind.config.ts.
+### 9.1 HØYT — Spillopplevelse
 
-### ✅ UI-003: `slideUp` keyframe er duplisert med forskjellige verdier
-**Status:** Fikset — CSS-versjonen fjernet, beholder Tailwind-versjonen.
+#### NY-001: Sanntids kupong-markering ved trekking
+**Kategori:** UX / Spillopplevelse
+**Beskrivelse:** Når tall trekkes, marker automatisk matchende celler på kupongen med animasjon (blink/highlight). Gi spilleren visuell feedback uten at de trenger å skjønne reglene.
+**Verdi:** Gjør spillet engasjerende og intuitivt, spesielt for nye spillere.
 
-### ✅ UI-004: NumberBall CSS-klasse og komponent-storrelser kan kollidere
-**Status:** Fikset — storrelsesverdier fjernet fra `.number-ball` CSS, lar komponent-props styre.
+#### NY-002: Confetti-animasjon ved bingo
+**Kategori:** UI / Spillopplevelse
+**Beskrivelse:** Canvas-basert confetti-animasjon når BINGO godkjennes — både på spillerens enhet og storskjerm. Bruk `canvas-confetti`-biblioteket.
+**Verdi:** Feiring som gir følelsesmessig klimaks.
 
-### ✅ UI-005: BingoButton har tre samtidige animasjoner
-**Status:** Fikset — bruker `useReducedMotion()` for a deaktivere animasjoner nar OS-preferanse er satt.
+#### NY-003: Lydeffekter for hendelser
+**Kategori:** UX / Spillopplevelse
+**Beskrivelse:** Korte lydeffekter for: tall trukket (pling), tall matcher din kupong (klikk), nær bingo (spenningsmusikk), bingo ropt (fanfare). Separat volumkontroll fra bakgrunnsmusikk.
+**Verdi:** Gjør spillet morsommere og mer immersivt.
 
-### ✅ UI-006: CommitmentsTable oppsummeringsrutenett kan overflyte pa 320px-skjermer
-**Status:** Fikset — `grid-cols-1 sm:grid-cols-3`.
+#### NY-004: Storskjerm — Vinnerbilde og animert spotlight
+**Kategori:** UI / Storskjerm
+**Beskrivelse:** Vis vinnerens profilbilde (eller initialer-avatar) i spotlight-animasjon på storskjerm ved godkjent bingo. Firebase Storage for bildeopplasting.
+**Verdi:** Sosialt element som motiverer spillere.
 
-### ✅ UI-007: DrawnNumbers har ingen tom-tilstand
-**Status:** Fikset — viser "Venter pa forste tall..." nar ingen tall er trukket.
+### 9.2 HØYT — Administrasjon
 
-### ✅ UI-008: Profilsiden mangler redigeringsfunksjonalitet
-**Status:** Notert — lav prioritet, krever ekstra Firestore-skrivelogikk. Akseptabelt for MVP.
+#### NY-005: Spilleroversikt med forpliktelsesteller
+**Kategori:** LOGIKK / Admin
+**Beskrivelse:** Ny samling `commitmentCounters` per lokasjon med antall forpliktelser per spiller. Admin kan se hvem som har flest forpliktelser, nullstille tellere. Vises i egen fane i AdminPage.
+**Verdi:** Gir admin oversikt og kontroll over hvem som bidrar.
 
-### ✅ UI-009: Profilsidens forpliktelsestellere inkluderer ikke "overdue"
-**Status:** Fikset — fjerde kolonne "Forfalt" lagt til med `grid-cols-2 sm:grid-cols-4`.
+#### NY-006: Push-varsler for bingo-rop og spillstart
+**Kategori:** UX / Varsler
+**Beskrivelse:** Web Push via Firebase Cloud Messaging (FCM) med service worker. Varsle spillere når spill åpner for kjøp, og admin når noen roper bingo. Krever ikke Cloud Functions — kan trigges klientside.
+**Verdi:** Spillere trenger ikke holde appen åpen for å få med seg at spillet starter.
 
-### ✅ UI-010: Norske tegn mangler i noen toast-meldinger
-**Status:** Akseptert — bevisst designbeslutning for ASCII-kompatibilitet.
+#### NY-007: QR-kode for rask tilgang til lokasjon
+**Kategori:** UX / Onboarding
+**Beskrivelse:** Generer QR-kode i AdminPage som lenker direkte til `/spill/:locationId`. Kan skrives ut og henges opp i lokalet. Bruk `qrcode`-biblioteket.
+**Verdi:** Eliminerer manuell URL-deling. Spillere skanner og er i gang.
 
-### ✅ UX-009: Ingen redirect-etter-login
-**Status:** Allerede handtert — URL bevares ved betinget route-rendering. Bruker lander pa opprinnelig URL etter innlogging.
+### 9.3 MIDDELS — Sikkerhet og robusthet
 
-### ✅ UX-010: Ingen lenke fra forpliktelse til lokasjon/spill
-**Status:** Fikset — lokasjonsnavn i profilsiden er na klikkbar lenke til `/spill/:locationId`.
+#### NY-008: Telefonnummervalidering (format)
+**Kategori:** SIKKERHET / Validering
+**Beskrivelse:** Valider at telefonnummer matcher norsk format (8 siffer, evt. +47-prefiks) i ProfilePage og i Firestore-regler. Vis formatfeil i sanntid.
+**Verdi:** Forhindrer ugyldige data og SMS-feil.
 
-### ✅ UI-011: Modal mangler storrelsesprop
-**Status:** Fikset — `size?: 'sm' | 'md' | 'lg' | 'xl'` prop lagt til.
+#### NY-009: Forfalt-status ("overdue") beregning
+**Kategori:** LOGIKK / Forpliktelser
+**Beskrivelse:** `CommitmentStatus: 'overdue'` er definert men aldri satt. Legg til `dueDate` i spillopprettelse og beregn forfalt-status klientside i lyttere (sammenlign `dueDate` med `Date.now()`).
+**Verdi:** Gir admin og spillere oversikt over forpliktelser som har gått over tid.
 
-### ✅ UI-012: Badge.tsx bruker React.ReactNode uten import
-**Status:** Fikset — `import type { ReactNode } from 'react'`.
+#### NY-010: Rate limiting på kupongkjøp
+**Kategori:** SIKKERHET
+**Beskrivelse:** Firestore-regel som forhindrer at samme bruker kjøper mer enn X kuponger per minutt (bruk `request.time` og `resource.data.purchasedAt`). Forhindrer misbruk.
+**Verdi:** Beskyttelse mot automatiserte/ondsinnede kjøp.
+
+### 9.4 MIDDELS — Brukeropplevelse
+
+#### NY-011: Historikk — Se tidligere spill og kuponger
+**Kategori:** UX / Historikk
+**Beskrivelse:** Ny side `/historikk/:locationId` som viser avsluttede spill med vinnere, trukne tall, og spillerens egne kuponger. Lenke fra admin og spillerside.
+**Verdi:** Gir verdi utover selve spillet — spillere kan se tilbake på sine spill.
+
+#### NY-012: Mørk modus
+**Kategori:** UI / Tilgjengelighet
+**Beskrivelse:** Tailwind `dark:`-klasser med systempreferanse-deteksjon og manuell toggle. Spesielt nyttig for storskjerm i mørke lokaler.
+**Verdi:** Bedre leseopplevelse i mørke omgivelser, moderne preg.
+
+#### NY-013: Flerspråklig støtte (i18n)
+**Kategori:** UX / Tilgjengelighet
+**Beskrivelse:** Alle brukersynlige strenger flyttes til `i18n/nb.json` med `react-i18next`. Legg til engelsk (`en.json`) som sekundærspråk.
+**Verdi:** Åpner for bruk i flerkulturelle foreninger og internasjonal interesse.
+
+#### NY-014: Onboarding-wizard for nye lokasjoner
+**Kategori:** UX / Admin
+**Beskrivelse:** Steg-for-steg wizard i SuperAdminPage: opprett lokasjon → legg til admins → konfigurer innstillinger → opprett første spill. Visuell fremdriftsindikator.
+**Verdi:** Reduserer friksjonen for nye brukere av systemet.
+
+### 9.5 LAVT — Teknisk gjeld og polish
+
+#### NY-015: Loading-state på enkelt-forpliktelse statusendring
+**Kategori:** UX
+**Beskrivelse:** ✓/✕-knappene i CommitmentsTable har ingen loading-indikator. Legg til per-rad loading state.
+
+#### NY-016: Vipps deep-link format-verifisering
+**Kategori:** LOGIKK
+**Beskrivelse:** Verifiser at Vipps deep-link-formatet (`vipps://send?number=...&amount=...`) stemmer med gjeldende Vipps-dokumentasjon.
+
+#### NY-017: SettingsPanel input-validering
+**Kategori:** UX
+**Beskrivelse:** Vis valideringsfeil for ugyldige verdier (negativ maxCoupons, for kort intervall, etc.) med inline feilmeldinger.
+
+#### NY-018: Code splitting for ruter
+**Kategori:** YTELSE
+**Beskrivelse:** Lazy-load sider med `React.lazy()` + `Suspense`. Firebase-chunken er 577 KB — split til per-rute bundles. Reduserer initial load.
+
+#### NY-019: E2E-tester med Playwright
+**Kategori:** KVALITET
+**Beskrivelse:** Automatiserte tester for kritiske flyter: registrering → kjøp → trekking → bingo → godkjenning. Kjøres mot Firebase-emulatorer.
+**Verdi:** Sikrer at fremtidige endringer ikke brekker kjernefunksjonalitet.
 
 ---
 
-## Teknisk gjeld — ✅ FIKSET
+## Teknisk gjeld (vedvarende)
 
-- ✅ `VALID_STATUS_TRANSITIONS` brukes na i `updateGameStatus`
-- ✅ `_markedCells`-parameter fjernet fra bingoValidator
-- ✅ `createLocation` bruker statisk `setDoc` import
-- ✅ `commitmentId` settes direkte i coupon-dokumentet
 - SettingsPanel validerer ikke input-verdier synlig for brukeren (lav prioritet)
-- `locationStore.initialize()` har ingen guard mot dobbelt-initialisering (StrictMode) (lav prioritet)
-- CommitmentsTable bruker ra HTML-knapper i stedet for Button-komponenten (kosmetisk)
-- Vipps deep-link-format bor verifiseres mot gjeldende Vipps-dokumentasjon (lav prioritet)
+- `locationStore.initialize()` har ingen guard mot dobbelt-initialisering i StrictMode (lav prioritet)
+- CommitmentsTable bruker rå HTML-knapper i stedet for Button-komponenten (kosmetisk)
+- Framer Motion `ref`-advarsel i konsollen (kosmetisk, fra AnimatePresence)

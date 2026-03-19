@@ -88,15 +88,6 @@ service cloud.firestore {
         && marked[12] == true;
     }
 
-    // ─── Valid status transitions ──────────────────────────
-
-    function isValidStatusTransition(oldStatus, newStatus) {
-      return (oldStatus == 'setup' && newStatus == 'open')
-        || (oldStatus == 'open' && newStatus == 'active')
-        || (oldStatus == 'active' && (newStatus == 'paused' || newStatus == 'finished'))
-        || (oldStatus == 'paused' && (newStatus == 'active' || newStatus == 'finished'));
-    }
-
     // ─── Users ─────────────────────────────────────────────
 
     match /users/{userId} {

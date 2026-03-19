@@ -197,6 +197,25 @@ export function listenToLocationCommitments(
   });
 }
 
+/** Listen to finished games for a location (history) */
+export function listenToFinishedGames(
+  locationId: string,
+  callback: (games: Game[]) => void
+): () => void {
+  const q = query(
+    gamesCol(locationId),
+    where('status', '==', 'finished'),
+    orderBy('finishedAt', 'desc')
+  );
+  return onSnapshot(q, (snap) => {
+    const games = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Game);
+    callback(games);
+  }, (error) => {
+    console.error('listenToFinishedGames error:', error);
+    callback([]);
+  });
+}
+
 /** Listen to all users (superadmin use) */
 export function listenToAllUsers(
   callback: (users: User[]) => void

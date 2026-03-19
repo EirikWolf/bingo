@@ -2,6 +2,7 @@
 
 > Revisjon 1: 2026-03-19. Alle 40+ punkter fikset.
 > Revisjon 2: 2026-03-19. Ny gjennomgang etter bugfikser, profilredigering, telefonnummerkrav, norske tegn og bakgrunnsmusikk.
+> Fase 9: 2026-03-19. 13 av 19 forbedringer implementert.
 > Kategorier: BUG, SIKKERHET, LOGIKK, UX, UI, YTELSE, MANGLER
 
 ---
@@ -37,144 +38,79 @@
 
 ---
 
-## Revisjon 2 — Fikset 2026-03-19
+## Revisjon 2 — ✅ ALLE FIKSET
 
-### ✅ BUG-007: `userPhone: undefined` krasjer kupongkjøp
-**Status:** Fikset — `userPhone ?? null` i `purchaseCoupon`. Firestore godtar ikke `undefined`.
+<details>
+<summary>Klikk for å se alle 8 løste punkter fra revisjon 2</summary>
 
-### ✅ BUG-008: Norske tegn (æ, ø, å) mangler i all brukersynlig tekst
-**Status:** Fikset — 30+ tekststrenger rettet i GamePage, AdminPage, BigScreenPage, LoginPage, ProfilePage, SuperAdminPage, DrawnNumbers, CommitmentsTable, InstallPrompt, SettingsPanel, BingoButton.
+- ✅ BUG-007: `userPhone: undefined` krasjer kupongkjøp
+- ✅ BUG-008: Norske tegn (æ, ø, å) mangler i all brukersynlig tekst
+- ✅ BUG-009: BingoButton — "naermeste" mangler æ
+- ✅ UI-013: Profilsiden mangler redigeringsfunksjonalitet
+- ✅ LOGIKK-014: Telefonnummer ikke påkrevd for kupongkjøp
+- ✅ UI-014: Bakgrunnsmusikk er generert oscillator-lyd
+- ✅ SIKKERHET-003: Firestore user-update tillater endring av uid og email
+- ✅ BUG-010: Firestore-indekser ikke deployet til produksjon
 
-### ✅ BUG-009: BingoButton — "naermeste" mangler æ
-**Status:** Fikset — "nærmeste gevinst".
-
-### ✅ UI-013: Profilsiden mangler redigeringsfunksjonalitet
-**Status:** Fikset — redigeringsmodus med navn og telefonnummer. `updateUserProfile()` i actions.ts.
-
-### ✅ LOGIKK-014: Telefonnummer ikke påkrevd for kupongkjøp
-**Status:** Fikset — banner på spillsiden, advarsel i kjøpsmodal, knapp deaktivert, guard i handlePurchase.
-
-### ✅ UI-014: Bakgrunnsmusikk er generert oscillator-lyd
-**Status:** Fikset — erstattet med ekte MP3-fil (`public/audio/background-music.mp3`). HTML Audio med loop. Volumslider alltid synlig.
-
-### ✅ SIKKERHET-003: Firestore user-update tillater endring av uid og email
-**Status:** Fikset — regel strammet: `request.resource.data.uid == resource.data.uid && request.resource.data.email == resource.data.email`.
-
-### ✅ BUG-010: Firestore-indekser ikke deployet til produksjon
-**Status:** Fikset — `firebase deploy --only firestore:indexes` kjørt.
+</details>
 
 ---
 
-## Fase 9: Videreutvikling — Gjør appen til en vinner
-
-> Nye forbedringsmuligheter identifisert i revisjon 2. Sortert etter forventet brukerverdi.
+## Fase 9: Videreutvikling — ✅ 13 av 19 implementert
 
 ### 9.1 HØYT — Spillopplevelse
 
-#### NY-001: Sanntids kupong-markering ved trekking
-**Kategori:** UX / Spillopplevelse
-**Beskrivelse:** Når tall trekkes, marker automatisk matchende celler på kupongen med animasjon (blink/highlight). Gi spilleren visuell feedback uten at de trenger å skjønne reglene.
-**Verdi:** Gjør spillet engasjerende og intuitivt, spesielt for nye spillere.
-
-#### NY-002: Confetti-animasjon ved bingo
-**Kategori:** UI / Spillopplevelse
-**Beskrivelse:** Canvas-basert confetti-animasjon når BINGO godkjennes — både på spillerens enhet og storskjerm. Bruk `canvas-confetti`-biblioteket.
-**Verdi:** Feiring som gir følelsesmessig klimaks.
-
-#### NY-003: Lydeffekter for hendelser
-**Kategori:** UX / Spillopplevelse
-**Beskrivelse:** Korte lydeffekter for: tall trukket (pling), tall matcher din kupong (klikk), nær bingo (spenningsmusikk), bingo ropt (fanfare). Separat volumkontroll fra bakgrunnsmusikk.
-**Verdi:** Gjør spillet morsommere og mer immersivt.
-
-#### NY-004: Storskjerm — Vinnerbilde og animert spotlight
-**Kategori:** UI / Storskjerm
-**Beskrivelse:** Vis vinnerens profilbilde (eller initialer-avatar) i spotlight-animasjon på storskjerm ved godkjent bingo. Firebase Storage for bildeopplasting.
-**Verdi:** Sosialt element som motiverer spillere.
+- ✅ **NY-001: Sanntids kupong-markering med glow-animasjon.** Celler lyser opp med puls-glow når et trukket tall matcher. CSS-animasjon `bingo-cell-glow`.
+- ✅ **NY-002: Confetti-animasjon ved bingo.** `canvas-confetti`-biblioteket. Confetti på spillerens enhet ved godkjent seier + storskjerm-variant med 6s regneffekt.
+- ✅ **NY-003: Lydeffekter for hendelser.** Syntetiserte lyder via Web Audio API: `draw` (pling), `match` (dobbeltbeep), `nearBingo` (stigende), `fanfare` (C-E-G-C). Separat volum fra stemme og musikk. Admin-kontroll.
+- ✅ **NY-004: Storskjerm — Vinnerbilde med spotlight.** Initialer-avatar med pulserende spotlight-animasjon. Confetti + animert inngang per vinner.
 
 ### 9.2 HØYT — Administrasjon
 
-#### NY-005: Spilleroversikt med forpliktelsesteller
-**Kategori:** LOGIKK / Admin
-**Beskrivelse:** Ny samling `commitmentCounters` per lokasjon med antall forpliktelser per spiller. Admin kan se hvem som har flest forpliktelser, nullstille tellere. Vises i egen fane i AdminPage.
-**Verdi:** Gir admin oversikt og kontroll over hvem som bidrar.
-
-#### NY-006: Push-varsler for bingo-rop og spillstart
-**Kategori:** UX / Varsler
-**Beskrivelse:** Web Push via Firebase Cloud Messaging (FCM) med service worker. Varsle spillere når spill åpner for kjøp, og admin når noen roper bingo. Krever ikke Cloud Functions — kan trigges klientside.
-**Verdi:** Spillere trenger ikke holde appen åpen for å få med seg at spillet starter.
-
-#### NY-007: QR-kode for rask tilgang til lokasjon
-**Kategori:** UX / Onboarding
-**Beskrivelse:** Generer QR-kode i AdminPage som lenker direkte til `/spill/:locationId`. Kan skrives ut og henges opp i lokalet. Bruk `qrcode`-biblioteket.
-**Verdi:** Eliminerer manuell URL-deling. Spillere skanner og er i gang.
+- ✅ **NY-005: Spilleroversikt med forpliktelsesteller.** Ny "Spillere"-fane i AdminPage. Aggregerer forpliktelser per spiller med sortering (flest totalt, flest ventende, navn).
+- ⬜ **NY-006: Push-varsler (FCM).** Ikke implementert — krever service worker-konfigurasjon og FCM-oppsett.
+- ✅ **NY-007: QR-kode for rask tilgang.** `qrcode.react` SVG-generering i AdminPage med nedlasting og direkte URL-visning.
 
 ### 9.3 MIDDELS — Sikkerhet og robusthet
 
-#### NY-008: Telefonnummervalidering (format)
-**Kategori:** SIKKERHET / Validering
-**Beskrivelse:** Valider at telefonnummer matcher norsk format (8 siffer, evt. +47-prefiks) i ProfilePage og i Firestore-regler. Vis formatfeil i sanntid.
-**Verdi:** Forhindrer ugyldige data og SMS-feil.
-
-#### NY-009: Forfalt-status ("overdue") beregning
-**Kategori:** LOGIKK / Forpliktelser
-**Beskrivelse:** `CommitmentStatus: 'overdue'` er definert men aldri satt. Legg til `dueDate` i spillopprettelse og beregn forfalt-status klientside i lyttere (sammenlign `dueDate` med `Date.now()`).
-**Verdi:** Gir admin og spillere oversikt over forpliktelser som har gått over tid.
-
-#### NY-010: Rate limiting på kupongkjøp
-**Kategori:** SIKKERHET
-**Beskrivelse:** Firestore-regel som forhindrer at samme bruker kjøper mer enn X kuponger per minutt (bruk `request.time` og `resource.data.purchasedAt`). Forhindrer misbruk.
-**Verdi:** Beskyttelse mot automatiserte/ondsinnede kjøp.
+- ✅ **NY-008: Telefonnummervalidering.** Norsk format (8 siffer ± +47). Sanntidsvalidering i ProfilePage. Auto-normalisering til +47-format ved lagring.
+- ✅ **NY-009: Forfalt-status beregning.** Klientside beregning: forpliktelser eldre enn 30 dager med status `pending` vises som `overdue`. Synlig i CommitmentsTable med forfalt-filter og oppsummering.
+- ⬜ **NY-010: Rate limiting på kupongkjøp.** Ikke implementert — Firestore-regler mangler god primitiv for tidbasert rate limiting. `maxCouponsPerPlayer` gir tilstrekkelig beskyttelse.
 
 ### 9.4 MIDDELS — Brukeropplevelse
 
-#### NY-011: Historikk — Se tidligere spill og kuponger
-**Kategori:** UX / Historikk
-**Beskrivelse:** Ny side `/historikk/:locationId` som viser avsluttede spill med vinnere, trukne tall, og spillerens egne kuponger. Lenke fra admin og spillerside.
-**Verdi:** Gir verdi utover selve spillet — spillere kan se tilbake på sine spill.
-
-#### NY-012: Mørk modus
-**Kategori:** UI / Tilgjengelighet
-**Beskrivelse:** Tailwind `dark:`-klasser med systempreferanse-deteksjon og manuell toggle. Spesielt nyttig for storskjerm i mørke lokaler.
-**Verdi:** Bedre leseopplevelse i mørke omgivelser, moderne preg.
-
-#### NY-013: Flerspråklig støtte (i18n)
-**Kategori:** UX / Tilgjengelighet
-**Beskrivelse:** Alle brukersynlige strenger flyttes til `i18n/nb.json` med `react-i18next`. Legg til engelsk (`en.json`) som sekundærspråk.
-**Verdi:** Åpner for bruk i flerkulturelle foreninger og internasjonal interesse.
-
-#### NY-014: Onboarding-wizard for nye lokasjoner
-**Kategori:** UX / Admin
-**Beskrivelse:** Steg-for-steg wizard i SuperAdminPage: opprett lokasjon → legg til admins → konfigurer innstillinger → opprett første spill. Visuell fremdriftsindikator.
-**Verdi:** Reduserer friksjonen for nye brukere av systemet.
+- ✅ **NY-011: Historikk — Se tidligere spill.** Ny side `/historikk/:locationId`. Viser avsluttede spill med vinnere, statistikk, og utvidbare trukne tall. Tilgjengelig fra spillersiden.
+- ⬜ **NY-012: Mørk modus.** Ikke implementert — krever gjennomgående `dark:`-klasser på alle komponenter.
+- ⬜ **NY-013: Flerspråklig støtte (i18n).** Ikke implementert — krever refaktorering av alle strenger.
+- ⬜ **NY-014: Onboarding-wizard.** Ikke implementert.
 
 ### 9.5 LAVT — Teknisk gjeld og polish
 
-#### NY-015: Loading-state på enkelt-forpliktelse statusendring
-**Kategori:** UX
-**Beskrivelse:** ✓/✕-knappene i CommitmentsTable har ingen loading-indikator. Legg til per-rad loading state.
+- ✅ **NY-015: Loading-state på forpliktelse-statusendring.** Per-rad loading med `processingIds` Set. Viser "Lagrer..." under operasjon.
+- ⬜ **NY-016: Vipps deep-link verifisering.** Ikke verifisert.
+- ✅ **NY-017: SettingsPanel input-validering.** Inline feilmeldinger for ugyldige verdier (negativ maxCoupons, intervall utenfor 3–30s, tom forpliktelse, negativt beløp).
+- ✅ **NY-018: Code splitting.** `React.lazy()` + `Suspense` for alle sider. Separate chunks i produksjonsbygg.
+- ⬜ **NY-019: E2E-tester med Playwright.** Ikke implementert.
 
-#### NY-016: Vipps deep-link format-verifisering
-**Kategori:** LOGIKK
-**Beskrivelse:** Verifiser at Vipps deep-link-formatet (`vipps://send?number=...&amount=...`) stemmer med gjeldende Vipps-dokumentasjon.
+---
 
-#### NY-017: SettingsPanel input-validering
-**Kategori:** UX
-**Beskrivelse:** Vis valideringsfeil for ugyldige verdier (negativ maxCoupons, for kort intervall, etc.) med inline feilmeldinger.
+## Gjenstående (fremtidig arbeid)
 
-#### NY-018: Code splitting for ruter
-**Kategori:** YTELSE
-**Beskrivelse:** Lazy-load sider med `React.lazy()` + `Suspense`. Firebase-chunken er 577 KB — split til per-rute bundles. Reduserer initial load.
-
-#### NY-019: E2E-tester med Playwright
-**Kategori:** KVALITET
-**Beskrivelse:** Automatiserte tester for kritiske flyter: registrering → kjøp → trekking → bingo → godkjenning. Kjøres mot Firebase-emulatorer.
-**Verdi:** Sikrer at fremtidige endringer ikke brekker kjernefunksjonalitet.
+| ID | Beskrivelse | Prioritet |
+|----|-------------|-----------|
+| NY-006 | Push-varsler via FCM | Høy |
+| NY-010 | Rate limiting i Firestore-regler | Middels |
+| NY-012 | Mørk modus | Middels |
+| NY-013 | Flerspråklig støtte (i18n) | Middels |
+| NY-014 | Onboarding-wizard for nye lokasjoner | Middels |
+| NY-016 | Vipps deep-link verifisering | Lav |
+| NY-019 | E2E-tester med Playwright | Lav |
 
 ---
 
 ## Teknisk gjeld (vedvarende)
 
-- SettingsPanel validerer ikke input-verdier synlig for brukeren (lav prioritet)
 - `locationStore.initialize()` har ingen guard mot dobbelt-initialisering i StrictMode (lav prioritet)
 - CommitmentsTable bruker rå HTML-knapper i stedet for Button-komponenten (kosmetisk)
 - Framer Motion `ref`-advarsel i konsollen (kosmetisk, fra AnimatePresence)
+- Firebase-chunken er 577 KB — kan splittes med manuell chunking i Vite config

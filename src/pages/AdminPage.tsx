@@ -6,6 +6,7 @@ import { listenToLocation, listenToGame, listenToPendingClaims, listenToGameCoup
 import { createGame, updateGameStatus, drawNumber, updateAutoDrawState, approveBingoClaim, rejectBingoClaim } from '@/services/actions';
 import { TOTAL_NUMBERS, VALID_STATUS_TRANSITIONS, GAME_STATUS_LABELS, WIN_CONDITION_LABELS } from '@/utils/constants';
 import { bingoSpeech, backgroundMusic } from '@/utils/speech';
+import { soundEffects } from '@/utils/effects';
 import { findWinCondition } from '@/utils/bingoValidator';
 import { CouponGrid } from '@/components/bingo/CouponGrid';
 import { Button } from '@/components/ui/Button';
@@ -16,9 +17,11 @@ import { Modal } from '@/components/ui/Modal';
 import { NumberBall } from '@/components/bingo/NumberBall';
 import { CommitmentsTable } from '@/components/admin/CommitmentsTable';
 import { SettingsPanel } from '@/components/admin/SettingsPanel';
+import { PlayerOverview } from '@/components/admin/PlayerOverview';
+import { QRCodeSVG } from 'qrcode.react';
 import type { Location, Game, BingoClaim, Coupon, GameStatus, WinCondition } from '@/types';
 
-type AdminTab = 'spill' | 'forpliktelser' | 'innstillinger';
+type AdminTab = 'spill' | 'forpliktelser' | 'spillere' | 'innstillinger';
 
 export default function AdminPage() {
   const { locationId } = useParams<{ locationId: string }>();
@@ -65,6 +68,10 @@ export default function AdminPage() {
   // Background music
   const [musicPlaying, setMusicPlaying] = useState(false);
   const [musicVolume, setMusicVolume] = useState(0.15);
+
+  // Sound effects
+  const [sfxEnabled, setSfxEnabled] = useState(true);
+  const [sfxVolume, setSfxVolume] = useState(0.5);
 
   // Track previous claims count for smart stop
   const prevClaimsCountRef = useRef(0);
@@ -268,6 +275,12 @@ export default function AdminPage() {
     }
   }, [game?.status]);
 
+  // Sync sound effects settings
+  useEffect(() => {
+    soundEffects.setEnabled(sfxEnabled);
+    soundEffects.setVolume(sfxVolume);
+  }, [sfxEnabled, sfxVolume]);
+
   // Cleanup music on unmount
   useEffect(() => {
     return () => {
@@ -382,7 +395,7 @@ export default function AdminPage() {
       {/* Tab navigation */}
       <div className="bg-white border-b border-gray-100">
         <div className="mx-auto max-w-2xl flex">
-          {([['spill', 'Spill'], ['forpliktelser', 'Forpliktelser'], ['innstillinger', 'Innstillinger']] as [AdminTab, string][]).map(([tab, label]) => (
+          {([['spill', 'Spill'], ['forpliktelser', 'Forpliktelser'], ['spillere', 'Spillere'], ['innstillinger', 'Innstillinger']] as [AdminTab, string][]).map(([tab, label]) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -408,6 +421,11 @@ export default function AdminPage() {
             vippsNumber={location.settings.vippsNumber}
             vippsDefaultAmount={location.settings.vippsDefaultAmount}
           />
+        )}
+
+        {/* Players tab */}
+        {activeTab === 'spillere' && locationId && (
+          <PlayerOverview locationId={locationId} />
         )}
 
         {/* Settings tab */}
@@ -830,6 +848,52 @@ export default function AdminPage() {
               </div>
             )}
 
+            {/* Sound effects */}
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-gray-700">Lydeffekter (spillere)</span>
+                <button
+                  role="switch"
+                  aria-checked={sfxEnabled}
+                  onClick={() => setSfxEnabled(!sfxEnabled)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    sfxEnabled ? 'bg-bingo-600' : 'bg-gray-300'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      sfxEnabled ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+              {sfxEnabled && (
+                <div>
+                  <div className="flex items-center justify-between text-xs text-gray-500">
+                    <span>Volum</span>
+                    <span>{Math.round(sfxVolume * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={sfxVolume}
+                    onChange={(e) => setSfxVolume(Number(e.target.value))}
+                    className="w-full accent-bingo-600"
+                  />
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="mt-1"
+                    onClick={() => soundEffects.play('match')}
+                  >
+                    Test lydeffekt
+                  </Button>
+                </div>
+              )}
+            </div>
+
             {/* Background music */}
             <div className="mt-4 pt-4 border-t border-gray-100">
               <div className="flex items-center justify-between mb-2">
@@ -890,6 +954,53 @@ export default function AdminPage() {
             </div>
           </Card>
         )}
+
+        {/* QR code for player access */}
+        <Card>
+          <h2 className="text-lg font-semibold text-gray-900 mb-3">QR-kode for spillere</h2>
+          <div className="flex flex-col items-center gap-3">
+            <div className="rounded-lg bg-white p-4 border border-gray-200">
+              <QRCodeSVG
+                value={`${window.location.origin}/spill/${locationId}`}
+                size={200}
+                level="M"
+                includeMargin
+              />
+            </div>
+            <p className="text-sm text-gray-500 text-center">
+              Skann for å komme direkte til spillet
+            </p>
+            <p className="text-xs text-gray-400 break-all text-center">
+              {window.location.origin}/spill/{locationId}
+            </p>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                const svg = document.querySelector('.qr-print-area svg');
+                if (!svg) return;
+                const svgData = new XMLSerializer().serializeToString(svg);
+                const blob = new Blob([svgData], { type: 'image/svg+xml' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `bingo-qr-${location.name}.svg`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+            >
+              Last ned QR-kode
+            </Button>
+          </div>
+          <div className="qr-print-area hidden">
+            <QRCodeSVG
+              value={`${window.location.origin}/spill/${locationId}`}
+              size={400}
+              level="M"
+              includeMargin
+            />
+          </div>
+        </Card>
         </Fragment>
         )}
       </main>

@@ -13,7 +13,7 @@ export function WinnerAnnouncement({ winners }: WinnerAnnouncementProps) {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl bg-gradient-to-r from-yellow-400 via-yellow-300 to-yellow-400 p-6 text-center shadow-xl"
+      className="rounded-2xl bg-gradient-to-r from-yellow-400 via-yellow-300 to-yellow-400 p-6 text-center shadow-xl winner-spotlight"
     >
       <motion.h2
         className="text-4xl lg:text-6xl font-extrabold text-yellow-900"
@@ -22,11 +22,32 @@ export function WinnerAnnouncement({ winners }: WinnerAnnouncementProps) {
       >
         BINGO!
       </motion.h2>
-      <div className="mt-4 space-y-2">
+      <div className="mt-4 space-y-3">
         {winners.map((w, i) => (
-          <div key={i} className="text-xl font-semibold text-yellow-800">
-            {w.displayName} — {WIN_CONDITION_LABELS[w.winCondition]}
-          </div>
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: i * 0.3 }}
+            className="flex flex-col items-center"
+          >
+            {/* Avatar circle with initials */}
+            <motion.div
+              className="h-20 w-20 lg:h-28 lg:w-28 rounded-full bg-yellow-900/20 flex items-center justify-center mb-2"
+              animate={{ scale: [1, 1.1, 1] }}
+              transition={{ repeat: Infinity, duration: 2, delay: i * 0.5 }}
+            >
+              <span className="text-3xl lg:text-5xl font-extrabold text-yellow-900">
+                {w.displayName.charAt(0).toUpperCase()}
+              </span>
+            </motion.div>
+            <p className="text-xl lg:text-3xl font-semibold text-yellow-800">
+              {w.displayName}
+            </p>
+            <p className="text-base lg:text-lg text-yellow-700">
+              {WIN_CONDITION_LABELS[w.winCondition]}
+            </p>
+          </motion.div>
         ))}
       </div>
     </motion.div>

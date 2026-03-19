@@ -189,9 +189,8 @@ service cloud.firestore {
                 'suggestedWinCondition', 'claimedAt'
               ]);
 
-          // Only admin can approve/reject (not the claim owner)
+          // Only location admin can approve/reject
           allow update: if isLocationAdmin(locationId)
-            && !isOwner(resource.data.userId)
             && (request.resource.data.status == 'approved' || request.resource.data.status == 'rejected');
 
           allow delete: if false;

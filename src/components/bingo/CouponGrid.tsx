@@ -84,7 +84,7 @@ function CouponCell({ number, isMarked, isFreeCell, isNewlyMarked }: CouponCellP
   if (isMarked) {
     return (
       <motion.div
-        className={`${baseClasses} bingo-cell-marked`}
+        className={`${baseClasses} bingo-cell-marked ${isNewlyMarked ? 'bingo-cell-glow' : ''}`}
         initial={isNewlyMarked ? { scale: 0.8 } : false}
         animate={{ scale: 1 }}
         transition={{ type: 'spring', stiffness: 300, damping: 20 }}

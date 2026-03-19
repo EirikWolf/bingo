@@ -59,6 +59,9 @@ export function CommitmentsTable({ locationId, adminUid, locationName, vippsNumb
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [batchProcessing, setBatchProcessing] = useState(false);
 
+  // Per-row loading state
+  const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     const unsub = listenToLocationCommitments(locationId, (data) => {
       setCommitments(data);
@@ -67,9 +70,24 @@ export function CommitmentsTable({ locationId, adminUid, locationName, vippsNumb
     return unsub;
   }, [locationId]);
 
+  // Compute overdue status for pending commitments (30 days after creation)
+  const OVERDUE_THRESHOLD_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+  const enrichedCommitments = useMemo(() => {
+    const now = Date.now();
+    return commitments.map((c) => {
+      if (c.status === 'pending' && c.createdAt) {
+        const createdMs = c.createdAt.toMillis();
+        const overdue = (now - createdMs) > OVERDUE_THRESHOLD_MS;
+        if (overdue) return { ...c, status: 'overdue' as CommitmentStatus };
+      }
+      return c;
+    });
+  }, [commitments]);
+
   // Filtered + sorted commitments
   const displayed = useMemo(() => {
-    let result = [...commitments];
+    let result = [...enrichedCommitments];
 
     // Filter by status
     if (filterStatus !== 'all') {
@@ -149,14 +167,21 @@ export function CommitmentsTable({ locationId, adminUid, locationName, vippsNumb
     }
   }
 
-  // Single status change
+  // Single status change with per-row loading
   async function handleStatusChange(id: string, status: 'confirmed' | 'cancelled') {
+    setProcessingIds((prev) => new Set(prev).add(id));
     try {
       await updateCommitmentStatus(id, status, adminUid);
       toast.success(status === 'confirmed' ? 'Bekreftet' : 'Kansellert');
     } catch (error) {
       console.error('Status change error:', error);
       toast.error('Kunne ikke endre status');
+    } finally {
+      setProcessingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   }
 
@@ -189,20 +214,25 @@ export function CommitmentsTable({ locationId, adminUid, locationName, vippsNumb
     return <Card className="text-center"><p className="text-gray-400">Laster forpliktelser...</p></Card>;
   }
 
-  const pendingCount = commitments.filter((c) => c.status === 'pending').length;
-  const confirmedCount = commitments.filter((c) => c.status === 'confirmed').length;
+  const pendingCount = enrichedCommitments.filter((c) => c.status === 'pending').length;
+  const confirmedCount = enrichedCommitments.filter((c) => c.status === 'confirmed').length;
+  const overdueCount = enrichedCommitments.filter((c) => c.status === 'overdue').length;
 
   return (
     <div className="space-y-4">
       {/* Summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center text-sm">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center text-sm">
         <Card padding="sm">
           <p className="text-gray-400">Totalt</p>
-          <p className="text-xl font-bold text-gray-900">{commitments.length}</p>
+          <p className="text-xl font-bold text-gray-900">{enrichedCommitments.length}</p>
         </Card>
         <Card padding="sm">
           <p className="text-gray-400">Ventende</p>
           <p className="text-xl font-bold text-yellow-600">{pendingCount}</p>
+        </Card>
+        <Card padding="sm">
+          <p className="text-gray-400">Forfalt</p>
+          <p className="text-xl font-bold text-red-600">{overdueCount}</p>
         </Card>
         <Card padding="sm">
           <p className="text-gray-400">Bekreftet</p>
@@ -230,6 +260,7 @@ export function CommitmentsTable({ locationId, adminUid, locationName, vippsNumb
           >
             <option value="all">Alle statuser</option>
             <option value="pending">Ventende</option>
+            <option value="overdue">Forfalt</option>
             <option value="confirmed">Bekreftet</option>
             <option value="cancelled">Kansellert</option>
           </select>
@@ -327,22 +358,28 @@ export function CommitmentsTable({ locationId, adminUid, locationName, vippsNumb
                   <td className="px-3 py-2">
                     <div className="flex gap-1">
                       {c.status === 'pending' && (
-                        <>
-                          <button
-                            onClick={() => handleStatusChange(c.id, 'confirmed')}
-                            className="rounded px-2 py-1 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100"
-                            title="Bekreft"
-                          >
-                            ✓
-                          </button>
-                          <button
-                            onClick={() => handleStatusChange(c.id, 'cancelled')}
-                            className="rounded px-2 py-1 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100"
-                            title="Kanseller"
-                          >
-                            ✕
-                          </button>
-                        </>
+                        processingIds.has(c.id) ? (
+                          <span className="text-xs text-gray-400 animate-pulse">Lagrer...</span>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleStatusChange(c.id, 'confirmed')}
+                              disabled={processingIds.has(c.id)}
+                              className="rounded px-2 py-1 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 disabled:opacity-50"
+                              title="Bekreft"
+                            >
+                              ✓
+                            </button>
+                            <button
+                              onClick={() => handleStatusChange(c.id, 'cancelled')}
+                              disabled={processingIds.has(c.id)}
+                              className="rounded px-2 py-1 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 disabled:opacity-50"
+                              title="Kanseller"
+                            >
+                              ✕
+                            </button>
+                          </>
+                        )
                       )}
                       {c.userPhone && (
                         <a

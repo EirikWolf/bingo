@@ -19,8 +19,33 @@ export function SettingsPanel({ location, locationId }: SettingsPanelProps) {
   const [maxCoupons, setMaxCoupons] = useState(s.maxCouponsPerPlayer.toString());
   const [autoDrawInterval, setAutoDrawInterval] = useState((s.autoDrawIntervalMs / 1000).toString());
   const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  function validate(): boolean {
+    const errs: Record<string, string> = {};
+    const maxCouponsNum = Number(maxCoupons);
+    const intervalNum = Number(autoDrawInterval);
+    const amountNum = vippsAmount ? Number(vippsAmount) : null;
+
+    if (maxCoupons !== '' && (isNaN(maxCouponsNum) || maxCouponsNum < 0)) {
+      errs.maxCoupons = 'Må være 0 eller høyere';
+    }
+    if (isNaN(intervalNum) || intervalNum < 3 || intervalNum > 30) {
+      errs.autoDrawInterval = 'Må være mellom 3 og 30 sekunder';
+    }
+    if (amountNum !== null && (isNaN(amountNum) || amountNum < 0)) {
+      errs.vippsAmount = 'Må være et positivt tall';
+    }
+    if (!defaultCommitment.trim()) {
+      errs.defaultCommitment = 'Kan ikke være tom';
+    }
+
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  }
 
   async function handleSave() {
+    if (!validate()) return;
     setSaving(true);
     try {
       await updateLocationSettings(locationId, {
@@ -69,10 +94,11 @@ export function SettingsPanel({ location, locationId }: SettingsPanelProps) {
               id="vipps-amount"
               type="number"
               value={vippsAmount}
-              onChange={(e) => setVippsAmount(e.target.value)}
+              onChange={(e) => { setVippsAmount(e.target.value); if (errors.vippsAmount) setErrors((p) => { const n = { ...p }; delete n.vippsAmount; return n; }); }}
               placeholder="Valgfritt"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-bingo-500 focus:outline-none"
+              className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none ${errors.vippsAmount ? 'border-red-300' : 'border-gray-300 focus:border-bingo-500'}`}
             />
+            {errors.vippsAmount && <p className="text-xs text-red-500 mt-1">{errors.vippsAmount}</p>}
           </div>
         </div>
       </Card>
@@ -89,9 +115,10 @@ export function SettingsPanel({ location, locationId }: SettingsPanelProps) {
               id="default-commitment"
               type="text"
               value={defaultCommitment}
-              onChange={(e) => setDefaultCommitment(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-bingo-500 focus:outline-none"
+              onChange={(e) => { setDefaultCommitment(e.target.value); if (errors.defaultCommitment) setErrors((p) => { const n = { ...p }; delete n.defaultCommitment; return n; }); }}
+              className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none ${errors.defaultCommitment ? 'border-red-300' : 'border-gray-300 focus:border-bingo-500'}`}
             />
+            {errors.defaultCommitment && <p className="text-xs text-red-500 mt-1">{errors.defaultCommitment}</p>}
           </div>
           <div>
             <label htmlFor="max-coupons" className="block text-sm text-gray-600 mb-1">
@@ -102,9 +129,10 @@ export function SettingsPanel({ location, locationId }: SettingsPanelProps) {
               type="number"
               min="0"
               value={maxCoupons}
-              onChange={(e) => setMaxCoupons(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-bingo-500 focus:outline-none"
+              onChange={(e) => { setMaxCoupons(e.target.value); if (errors.maxCoupons) setErrors((p) => { const n = { ...p }; delete n.maxCoupons; return n; }); }}
+              className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none ${errors.maxCoupons ? 'border-red-300' : 'border-gray-300 focus:border-bingo-500'}`}
             />
+            {errors.maxCoupons && <p className="text-xs text-red-500 mt-1">{errors.maxCoupons}</p>}
           </div>
           <div>
             <label htmlFor="draw-interval" className="block text-sm text-gray-600 mb-1">
@@ -116,9 +144,10 @@ export function SettingsPanel({ location, locationId }: SettingsPanelProps) {
               min="3"
               max="30"
               value={autoDrawInterval}
-              onChange={(e) => setAutoDrawInterval(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-bingo-500 focus:outline-none"
+              onChange={(e) => { setAutoDrawInterval(e.target.value); if (errors.autoDrawInterval) setErrors((p) => { const n = { ...p }; delete n.autoDrawInterval; return n; }); }}
+              className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none ${errors.autoDrawInterval ? 'border-red-300' : 'border-gray-300 focus:border-bingo-500'}`}
             />
+            {errors.autoDrawInterval && <p className="text-xs text-red-500 mt-1">{errors.autoDrawInterval}</p>}
           </div>
         </div>
       </Card>

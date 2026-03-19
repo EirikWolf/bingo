@@ -39,9 +39,43 @@
     @apply flex items-center justify-center rounded-full font-bold text-white shadow-lg;
   }
 
+  /* Newly matched cell glow animation */
+  .bingo-cell-glow {
+    animation: cellGlow 1.5s ease-out;
+  }
+
+  @keyframes cellGlow {
+    0% {
+      box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7);
+      transform: scale(0.8);
+    }
+    30% {
+      box-shadow: 0 0 12px 4px rgba(99, 102, 241, 0.5);
+      transform: scale(1.1);
+    }
+    100% {
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      transform: scale(1);
+    }
+  }
+
   /* Big screen number display */
   .big-number {
     @apply flex h-40 w-40 items-center justify-center rounded-full text-6xl font-extrabold text-white shadow-2xl lg:h-60 lg:w-60 lg:text-8xl;
+  }
+
+  /* Winner spotlight animation */
+  .winner-spotlight {
+    animation: spotlight 3s ease-in-out infinite;
+  }
+
+  @keyframes spotlight {
+    0%, 100% {
+      box-shadow: 0 0 20px 5px rgba(250, 204, 21, 0.4);
+    }
+    50% {
+      box-shadow: 0 0 40px 15px rgba(250, 204, 21, 0.7);
+    }
   }
 }
 

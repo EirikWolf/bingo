@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/stores/authStore';
@@ -7,6 +7,7 @@ import { purchaseCoupon } from '@/services/actions';
 import { submitBingoClaim } from '@/services/actions';
 import { findWinCondition, countRemainingForWin } from '@/utils/bingoValidator';
 import { GAME_STATUS_LABELS } from '@/utils/constants';
+import { celebrateBingo, soundEffects } from '@/utils/effects';
 import { CouponGrid } from '@/components/bingo/CouponGrid';
 import { DrawnNumbers } from '@/components/bingo/DrawnNumbers';
 import { BingoButton } from '@/components/bingo/BingoButton';
@@ -80,6 +81,46 @@ export default function GamePage() {
     if (!activeCoupon || !game) return 99;
     return countRemainingForWin(activeCoupon.numbers, drawnSet, game.winConditions);
   }, [activeCoupon, game, drawnSet]);
+
+  // Track drawn numbers for sound effects
+  const prevDrawnCountRef = useRef(0);
+  const prevRemainingRef = useRef(99);
+  const celebratedRef = useRef(false);
+
+  useEffect(() => {
+    const drawnCount = game?.drawnNumbers.length ?? 0;
+    if (drawnCount > prevDrawnCountRef.current && prevDrawnCountRef.current > 0) {
+      // A new number was drawn
+      const latestNumber = game?.currentNumber ?? 0;
+      const couponNumbers = activeCoupon?.numbers ?? [];
+      if (couponNumbers.includes(latestNumber)) {
+        soundEffects.play('match');
+      } else {
+        soundEffects.play('draw');
+      }
+    }
+    prevDrawnCountRef.current = drawnCount;
+  }, [game?.drawnNumbers.length, game?.currentNumber, activeCoupon?.numbers]);
+
+  // Near-bingo sound (when 1 away)
+  useEffect(() => {
+    if (remaining === 1 && prevRemainingRef.current > 1) {
+      soundEffects.play('nearBingo');
+    }
+    prevRemainingRef.current = remaining;
+  }, [remaining]);
+
+  // Confetti + fanfare when player wins
+  useEffect(() => {
+    if (activeCoupon?.isWinner && !celebratedRef.current) {
+      celebratedRef.current = true;
+      celebrateBingo();
+      soundEffects.play('fanfare');
+    }
+    if (!activeCoupon?.isWinner) {
+      celebratedRef.current = false;
+    }
+  }, [activeCoupon?.isWinner]);
 
   // Purchase handler
   async function handlePurchase() {
@@ -284,6 +325,14 @@ export default function GamePage() {
             remaining={remaining}
           />
         )}
+
+        {/* History link */}
+        <button
+          onClick={() => navigate(`/historikk/${locationId}`)}
+          className="w-full text-center text-sm text-bingo-600 hover:underline mt-2"
+        >
+          Se tidligere spill →
+        </button>
       </main>
 
       {/* Purchase modal */}

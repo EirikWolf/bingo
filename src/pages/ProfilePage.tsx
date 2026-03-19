@@ -35,6 +35,7 @@ export default function ProfilePage() {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
+  const [phoneError, setPhoneError] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -46,10 +47,20 @@ export default function ProfilePage() {
     return unsub;
   }, [user?.uid]);
 
+  /** Validate Norwegian phone number: 8 digits, optionally prefixed with +47 */
+  function validatePhone(phone: string): string {
+    if (!phone.trim()) return ''; // empty is OK (not mandatory here)
+    const cleaned = phone.replace(/[\s-]/g, '');
+    if (/^\+47\d{8}$/.test(cleaned)) return '';
+    if (/^\d{8}$/.test(cleaned)) return '';
+    return 'Ugyldig format. Bruk 8 siffer (f.eks. 91234567) eller +47 fulgt av 8 siffer.';
+  }
+
   function startEditing() {
     if (!user) return;
     setEditName(user.displayName ?? '');
     setEditPhone(user.phone ?? '');
+    setPhoneError('');
     setEditing(true);
   }
 
@@ -59,11 +70,21 @@ export default function ProfilePage() {
 
   async function handleSaveProfile() {
     if (!user || !editName.trim()) return;
+    const phoneErr = validatePhone(editPhone);
+    if (phoneErr) {
+      setPhoneError(phoneErr);
+      return;
+    }
     setSaving(true);
     try {
+      // Normalize phone: strip spaces/dashes, ensure +47 prefix if 8 digits
+      let normalizedPhone: string | null = editPhone.trim().replace(/[\s-]/g, '') || null;
+      if (normalizedPhone && /^\d{8}$/.test(normalizedPhone)) {
+        normalizedPhone = `+47${normalizedPhone}`;
+      }
       await updateUserProfile(user.uid, {
         displayName: editName.trim(),
-        phone: editPhone.trim() || null,
+        phone: normalizedPhone,
       });
       toast.success('Profilen er oppdatert!');
       setEditing(false);
@@ -172,10 +193,20 @@ export default function ProfilePage() {
                   id="edit-phone"
                   type="tel"
                   value={editPhone}
-                  onChange={(e) => setEditPhone(e.target.value)}
-                  placeholder="F.eks. 91234567"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-bingo-500 focus:outline-none focus:ring-1 focus:ring-bingo-500"
+                  onChange={(e) => {
+                    setEditPhone(e.target.value);
+                    if (phoneError) setPhoneError(validatePhone(e.target.value));
+                  }}
+                  placeholder="F.eks. 91234567 eller +4791234567"
+                  className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-1 ${
+                    phoneError
+                      ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
+                      : 'border-gray-300 focus:border-bingo-500 focus:ring-bingo-500'
+                  }`}
                 />
+                {phoneError && (
+                  <p className="text-xs text-red-500 mt-1">{phoneError}</p>
+                )}
               </div>
               {user.email && (
                 <p className="text-xs text-gray-400">E-post: {user.email} (kan ikke endres)</p>
@@ -192,7 +223,7 @@ export default function ProfilePage() {
                 <Button
                   className="flex-1"
                   loading={saving}
-                  disabled={!editName.trim()}
+                  disabled={!editName.trim() || !!phoneError}
                   onClick={handleSaveProfile}
                 >
                   Lagre

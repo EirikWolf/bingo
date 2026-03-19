@@ -7,6 +7,7 @@ import { WinnerAnnouncement } from '@/components/bigscreen/WinnerAnnouncement';
 import { Spinner } from '@/components/ui/Spinner';
 import { GAME_STATUS_LABELS } from '@/utils/constants';
 import { bingoSpeech } from '@/utils/speech';
+import { celebrateBigScreen } from '@/utils/effects';
 import type { Location, Game } from '@/types';
 
 export default function BigScreenPage() {
@@ -115,6 +116,18 @@ export default function BigScreenPage() {
     document.addEventListener('fullscreenchange', handleFsChange);
     return () => document.removeEventListener('fullscreenchange', handleFsChange);
   }, []);
+
+  // Confetti on winner announcement
+  const prevWinnersCountRef = useRef(0);
+  useEffect(() => {
+    const count = game?.winners.length ?? 0;
+    if (count > prevWinnersCountRef.current && prevWinnersCountRef.current >= 0) {
+      if (count > 0) {
+        celebrateBigScreen();
+      }
+    }
+    prevWinnersCountRef.current = count;
+  }, [game?.winners.length]);
 
   // Cleanup speech on unmount
   useEffect(() => {

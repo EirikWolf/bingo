@@ -23,8 +23,10 @@ export default function BigScreenPage() {
   const [countdown, setCountdown] = useState(0);
   const [drawing, setDrawing] = useState(false);
   const [showControls, setShowControls] = useState(true);
+  const [autoDrawEnabled, setAutoDrawEnabled] = useState(false);
 
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoDrawRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevCurrentNumberRef = useRef<number | null>(null);
 
   const isAdmin = user?.uid ? (location?.adminUids.includes(user.uid) ?? false) : false;
@@ -68,39 +70,14 @@ export default function BigScreenPage() {
     }
   }, [game?.currentNumber]);
 
-  // Countdown timer synced from game.lastDrawAt + game.autoDrawIntervalMs
+  // Sync autoDrawEnabled from Firestore game state
   useEffect(() => {
-    if (countdownRef.current) {
-      clearInterval(countdownRef.current);
-      countdownRef.current = null;
+    if (game?.autoDrawActive && game.status === 'active') {
+      setAutoDrawEnabled(true);
+    } else {
+      setAutoDrawEnabled(false);
     }
-
-    if (!game?.autoDrawActive || !game.lastDrawAt || game.status !== 'active') {
-      setCountdown(0);
-      return;
-    }
-
-    const intervalMs = game.autoDrawIntervalMs || 5000;
-
-    function tick() {
-      if (!game?.lastDrawAt) return;
-      const lastDrawTime = game.lastDrawAt.toDate().getTime();
-      const now = Date.now();
-      const elapsed = now - lastDrawTime;
-      const remaining = Math.max(0, Math.ceil((intervalMs - elapsed) / 1000));
-      setCountdown(remaining);
-    }
-
-    tick();
-    countdownRef.current = setInterval(tick, 500);
-
-    return () => {
-      if (countdownRef.current) {
-        clearInterval(countdownRef.current);
-        countdownRef.current = null;
-      }
-    };
-  }, [game?.autoDrawActive, game?.lastDrawAt, game?.autoDrawIntervalMs, game?.status]);
+  }, [game?.autoDrawActive, game?.status]);
 
   const drawnSet = useMemo(
     () => new Set(game?.drawnNumbers ?? []),
@@ -162,14 +139,78 @@ export default function BigScreenPage() {
 
   async function handleStartAutoDraw() {
     if (!locationId || !game) return;
+    setAutoDrawEnabled(true);
     await updateAutoDrawState(locationId, game.id, true, autoDrawInterval * 1000);
     handleDraw();
   }
 
   async function handlePauseAutoDraw() {
     if (!locationId || !game) return;
+    setAutoDrawEnabled(false);
+    setCountdown(0);
     await updateAutoDrawState(locationId, game.id, false, autoDrawInterval * 1000);
   }
+
+  // Auto-draw loop — actually draws numbers on interval
+  useEffect(() => {
+    if (autoDrawRef.current) {
+      clearInterval(autoDrawRef.current);
+      autoDrawRef.current = null;
+    }
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
+
+    if (autoDrawEnabled && game?.status === 'active' && availableNumbers.length > 0 && isAdmin) {
+      const intervalMs = autoDrawInterval * 1000;
+      let nextDrawTime = Date.now() + intervalMs;
+
+      const tick = () => {
+        const remaining = Math.max(0, Math.ceil((nextDrawTime - Date.now()) / 1000));
+        setCountdown(remaining);
+      };
+      tick();
+      countdownRef.current = setInterval(tick, 500);
+
+      autoDrawRef.current = setInterval(() => {
+        handleDraw();
+        nextDrawTime = Date.now() + intervalMs;
+      }, intervalMs);
+    } else if (!isAdmin && autoDrawEnabled) {
+      // Non-admin: just show countdown from Firestore timestamps
+      const intervalMs = game?.autoDrawIntervalMs || 5000;
+      const tick = () => {
+        if (!game?.lastDrawAt) return;
+        const lastDrawTime = game.lastDrawAt.toDate().getTime();
+        const elapsed = Date.now() - lastDrawTime;
+        const remaining = Math.max(0, Math.ceil((intervalMs - elapsed) / 1000));
+        setCountdown(remaining);
+      };
+      tick();
+      countdownRef.current = setInterval(tick, 500);
+    } else {
+      setCountdown(0);
+    }
+
+    return () => {
+      if (autoDrawRef.current) {
+        clearInterval(autoDrawRef.current);
+        autoDrawRef.current = null;
+      }
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+        countdownRef.current = null;
+      }
+    };
+  }, [autoDrawEnabled, game?.status, availableNumbers.length, autoDrawInterval, handleDraw, isAdmin, game?.lastDrawAt, game?.autoDrawIntervalMs]);
+
+  // Stop auto-draw when game is not active
+  useEffect(() => {
+    if (game?.status !== 'active') {
+      setAutoDrawEnabled(false);
+    }
+  }, [game?.status]);
 
   // Cleanup speech on unmount
   useEffect(() => {
@@ -262,7 +303,7 @@ export default function BigScreenPage() {
             </div>
 
             {/* Countdown to next draw */}
-            {game.autoDrawActive && countdown > 0 && game.status === 'active' && (
+            {autoDrawEnabled && countdown > 0 && game.status === 'active' && (
               <div className="flex flex-col items-center">
                 <p className="text-xs text-bingo-400 mb-1">Neste tall om</p>
                 <div className="relative h-16 w-16">
@@ -345,7 +386,7 @@ export default function BigScreenPage() {
         <div className="fixed bottom-6 left-6 z-50">
           {showControls ? (
             <div className="flex items-center gap-2 rounded-2xl bg-black/70 backdrop-blur-sm px-4 py-3 shadow-lg border border-white/10">
-              {game.autoDrawActive ? (
+              {autoDrawEnabled ? (
                 <button
                   onClick={handlePauseAutoDraw}
                   className="flex items-center gap-2 rounded-xl bg-yellow-500 hover:bg-yellow-400 text-black font-semibold px-5 py-2.5 text-sm transition-colors"
@@ -364,7 +405,7 @@ export default function BigScreenPage() {
               <button
                 onClick={() => {
                   handleDraw();
-                  if (game.autoDrawActive) {
+                  if (autoDrawEnabled) {
                     // Reset countdown visual after manual draw
                   }
                 }}

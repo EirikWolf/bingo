@@ -18,7 +18,7 @@ import { NumberBall } from '@/components/bingo/NumberBall';
 import { CommitmentsTable } from '@/components/admin/CommitmentsTable';
 import { SettingsPanel } from '@/components/admin/SettingsPanel';
 import { PlayerOverview } from '@/components/admin/PlayerOverview';
-import { QRCodeSVG } from 'qrcode.react';
+import { QrCodeSection } from '@/components/admin/QrCodeSection';
 import type { Location, Game, BingoClaim, Coupon, GameStatus, WinCondition } from '@/types';
 
 type AdminTab = 'spill' | 'forpliktelser' | 'spillere' | 'innstillinger';
@@ -958,48 +958,7 @@ export default function AdminPage() {
         {/* QR code for player access */}
         <Card>
           <h2 className="text-lg font-semibold text-gray-900 mb-3">QR-kode for spillere</h2>
-          <div className="flex flex-col items-center gap-3">
-            <div className="rounded-lg bg-white p-4 border border-gray-200">
-              <QRCodeSVG
-                value={`${window.location.origin}/spill/${locationId}`}
-                size={200}
-                level="M"
-                includeMargin
-              />
-            </div>
-            <p className="text-sm text-gray-500 text-center">
-              Skann for å komme direkte til spillet
-            </p>
-            <p className="text-xs text-gray-400 break-all text-center">
-              {window.location.origin}/spill/{locationId}
-            </p>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => {
-                const svg = document.querySelector('.qr-print-area svg');
-                if (!svg) return;
-                const svgData = new XMLSerializer().serializeToString(svg);
-                const blob = new Blob([svgData], { type: 'image/svg+xml' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `bingo-qr-${location.name}.svg`;
-                a.click();
-                URL.revokeObjectURL(url);
-              }}
-            >
-              Last ned QR-kode
-            </Button>
-          </div>
-          <div className="qr-print-area hidden">
-            <QRCodeSVG
-              value={`${window.location.origin}/spill/${locationId}`}
-              size={400}
-              level="M"
-              includeMargin
-            />
-          </div>
+          <QrCodeSection locationId={locationId!} locationName={location.name} />
         </Card>
         </Fragment>
         )}

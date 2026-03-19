@@ -1,38 +1,37 @@
-import { COLUMN_RANGES, BINGO_LETTERS } from './constants';
-import { FREE_SPACE_ROW, FREE_SPACE_COL, GRID_SIZE } from '@/types';
 import type { CouponGrid, MarkedGrid } from '@/types';
+import { GRID_SIZE, FREE_CELL_INDEX } from './constants';
+import { COLUMN_RANGES } from './constants';
 
 /**
- * Generer tilfeldig kupong-rutenett.
+ * Generate a random bingo coupon as a flat 25-element array (row-major order).
  *
- * MERK: Denne brukes kun for forhåndsvisning/testing på klientsiden.
- * Faktiske kuponger genereres i Cloud Functions for integritetssikring.
+ * Layout (row-major):
+ *   index = row * 5 + col
+ *   col 0 = B (1-15), col 1 = I (16-30), col 2 = N (31-45), col 3 = G (46-60), col 4 = O (61-75)
+ *   Center cell (index 12, row 2 col 2) = 0 (free space)
  */
 export function generateCouponNumbers(): CouponGrid {
-  const grid: CouponGrid = [];
+  const grid: number[] = new Array<number>(GRID_SIZE * GRID_SIZE).fill(0);
 
-  for (let row = 0; row < GRID_SIZE; row++) {
-    grid[row] = [];
-    for (let col = 0; col < GRID_SIZE; col++) {
-      grid[row][col] = 0; // Placeholder
-    }
-  }
-
-  // Generer tall per kolonne
   for (let col = 0; col < GRID_SIZE; col++) {
-    const letter = BINGO_LETTERS[col];
-    const range = COLUMN_RANGES[letter];
-    const count = col === FREE_SPACE_COL ? GRID_SIZE - 1 : GRID_SIZE;
-    const numbers = pickRandom(range.min, range.max, count);
+    const range = COLUMN_RANGES[col];
+    if (!range) throw new Error(`No range for column ${col}`);
 
-    let numIdx = 0;
+    const count = col === 2 ? 4 : 5; // N-column has 4 numbers + free space
+    const selected = pickRandom(range.min, range.max, count);
+
+    let selectedIndex = 0;
     for (let row = 0; row < GRID_SIZE; row++) {
-      if (row === FREE_SPACE_ROW && col === FREE_SPACE_COL) {
-        grid[row][col] = 0; // Fri rute
-      } else {
-        grid[row][col] = numbers[numIdx];
-        numIdx++;
+      const flatIndex = row * GRID_SIZE + col;
+
+      // Skip center cell for N-column
+      if (flatIndex === FREE_CELL_INDEX) {
+        grid[flatIndex] = 0;
+        continue;
       }
+
+      grid[flatIndex] = selected[selectedIndex]!;
+      selectedIndex++;
     }
   }
 
@@ -40,52 +39,42 @@ export function generateCouponNumbers(): CouponGrid {
 }
 
 /**
- * Generer tom markeringsmatrise med fri rute allerede markert.
+ * Create an empty marked grid. Center cell starts as true (free space).
  */
 export function createEmptyMarkedGrid(): MarkedGrid {
-  const grid: MarkedGrid = [];
-  for (let row = 0; row < GRID_SIZE; row++) {
-    grid[row] = [];
-    for (let col = 0; col < GRID_SIZE; col++) {
-      grid[row][col] = row === FREE_SPACE_ROW && col === FREE_SPACE_COL;
-    }
-  }
+  const grid: boolean[] = new Array<boolean>(GRID_SIZE * GRID_SIZE).fill(false);
+  grid[FREE_CELL_INDEX] = true;
   return grid;
 }
 
 /**
- * Oppdater markeringsmatrise basert på trukne tall.
+ * Pick `count` unique random numbers from [min, max] inclusive.
  */
-export function markDrawnNumbers(
-  numbers: CouponGrid,
-  drawnNumbers: number[]
-): MarkedGrid {
-  const drawnSet = new Set(drawnNumbers);
-  const marked = createEmptyMarkedGrid();
-
-  for (let row = 0; row < GRID_SIZE; row++) {
-    for (let col = 0; col < GRID_SIZE; col++) {
-      if (row === FREE_SPACE_ROW && col === FREE_SPACE_COL) continue;
-      if (drawnSet.has(numbers[row][col])) {
-        marked[row][col] = true;
-      }
-    }
+function pickRandom(min: number, max: number, count: number): number[] {
+  const available: number[] = [];
+  for (let i = min; i <= max; i++) {
+    available.push(i);
   }
 
-  return marked;
+  // Fisher-Yates shuffle
+  for (let i = available.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [available[i], available[j]] = [available[j]!, available[i]!];
+  }
+
+  return available.slice(0, count);
 }
 
-/** Velg `count` unike tilfeldige tall fra `min` til `max` (inklusiv). */
-function pickRandom(min: number, max: number, count: number): number[] {
-  const pool: number[] = [];
-  for (let i = min; i <= max; i++) pool.push(i);
+/**
+ * Get the value at (row, col) in a flat coupon grid.
+ */
+export function getCellValue(grid: CouponGrid, row: number, col: number): number {
+  return grid[row * GRID_SIZE + col] ?? 0;
+}
 
-  const result: number[] = [];
-  for (let i = 0; i < count; i++) {
-    const idx = Math.floor(Math.random() * pool.length);
-    result.push(pool[idx]);
-    pool.splice(idx, 1);
-  }
-
-  return result;
+/**
+ * Check if a cell is marked in a flat marked grid.
+ */
+export function isCellMarked(grid: MarkedGrid, row: number, col: number): boolean {
+  return grid[row * GRID_SIZE + col] ?? false;
 }

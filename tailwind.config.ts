@@ -20,8 +20,8 @@ export default {
         },
         ball: {
           b: '#ef4444',    // Rød  (B: 1-15)
-          i: '#f59e0b',    // Gul  (I: 16-30)
-          n: '#22c55e',    // Grønn (N: 31-45)
+          i: '#d97706',    // Gul/Amber (I: 16-30) — darkened for white text contrast
+          n: '#16a34a',    // Grønn (N: 31-45) — darkened for white text contrast
           g: '#3b82f6',    // Blå  (G: 46-60)
           o: '#8b5cf6',    // Lilla (O: 61-75)
         },
@@ -30,7 +30,6 @@ export default {
         'bounce-in': 'bounceIn 0.6s ease-out',
         'pulse-glow': 'pulseGlow 2s infinite',
         'slide-up': 'slideUp 0.3s ease-out',
-        'confetti': 'confetti 1s ease-out',
       },
       keyframes: {
         bounceIn: {

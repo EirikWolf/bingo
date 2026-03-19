@@ -1,138 +1,198 @@
-import { GRID_SIZE } from '@/types';
-import type { MarkedGrid, WinCondition } from '@/types';
+import type { CouponGrid, WinCondition } from '@/types';
+import { GRID_SIZE, FREE_CELL_INDEX } from './constants';
 
 /**
- * Sjekk om en kupong har oppnådd en gevinstbetingelse.
- *
- * Brukes på klientsiden for å vise "nesten Bingo"-indikatorer
- * og aktivere Bingo-knappen. Autoritativ validering skjer i Cloud Function.
+ * Check if a coupon has achieved a specific win condition.
+ * Uses flat 25-element arrays (row-major order).
+ * Note: Win is determined solely by drawn numbers, not manual marks.
  */
-export function checkWinConditions(
-  marked: MarkedGrid,
+export function checkWinCondition(
+  numbers: CouponGrid,
+  drawnNumbers: Set<number>,
+  condition: WinCondition
+): boolean {
+  // First, compute effective marks: cell is marked if drawn or free space
+  const effective = computeEffectiveMarks(numbers, drawnNumbers);
+
+  switch (condition) {
+    case 'row':
+      return checkRows(effective);
+    case 'column':
+      return checkColumns(effective);
+    case 'diagonal':
+      return checkDiagonals(effective);
+    case 'full_board':
+      return checkFullBoard(effective);
+  }
+}
+
+/**
+ * Compute which cells are effectively marked based on drawn numbers.
+ * A cell is marked if its number has been drawn, or if it's the free space.
+ */
+function computeEffectiveMarks(numbers: CouponGrid, drawnNumbers: Set<number>): boolean[] {
+  return numbers.map((num, index) => {
+    if (index === FREE_CELL_INDEX) return true;
+    return drawnNumbers.has(num);
+  });
+}
+
+function checkRows(marks: boolean[]): boolean {
+  for (let row = 0; row < GRID_SIZE; row++) {
+    let complete = true;
+    for (let col = 0; col < GRID_SIZE; col++) {
+      if (!marks[row * GRID_SIZE + col]) {
+        complete = false;
+        break;
+      }
+    }
+    if (complete) return true;
+  }
+  return false;
+}
+
+function checkColumns(marks: boolean[]): boolean {
+  for (let col = 0; col < GRID_SIZE; col++) {
+    let complete = true;
+    for (let row = 0; row < GRID_SIZE; row++) {
+      if (!marks[row * GRID_SIZE + col]) {
+        complete = false;
+        break;
+      }
+    }
+    if (complete) return true;
+  }
+  return false;
+}
+
+function checkDiagonals(marks: boolean[]): boolean {
+  // Top-left to bottom-right
+  let diag1 = true;
+  for (let i = 0; i < GRID_SIZE; i++) {
+    if (!marks[i * GRID_SIZE + i]) {
+      diag1 = false;
+      break;
+    }
+  }
+  if (diag1) return true;
+
+  // Top-right to bottom-left
+  let diag2 = true;
+  for (let i = 0; i < GRID_SIZE; i++) {
+    if (!marks[i * GRID_SIZE + (GRID_SIZE - 1 - i)]) {
+      diag2 = false;
+      break;
+    }
+  }
+  return diag2;
+}
+
+function checkFullBoard(marks: boolean[]): boolean {
+  return marks.every(Boolean);
+}
+
+/**
+ * Check all win conditions and return the first matching one, or null.
+ */
+export function findWinCondition(
+  numbers: CouponGrid,
+  drawnNumbers: Set<number>,
   activeConditions: WinCondition[]
 ): WinCondition | null {
   for (const condition of activeConditions) {
-    if (checkCondition(marked, condition)) {
+    if (checkWinCondition(numbers, drawnNumbers, condition)) {
       return condition;
     }
   }
   return null;
 }
 
-/** Tell antall gjenstående markerte celler for nærmeste gevinst. */
+/**
+ * Count how many cells remain unmarked for the closest win condition.
+ * Returns the minimum remaining count across all active conditions.
+ */
 export function countRemainingForWin(
-  marked: MarkedGrid,
+  numbers: CouponGrid,
+  drawnNumbers: Set<number>,
   activeConditions: WinCondition[]
 ): number {
-  let minRemaining = Infinity;
+  const effective = computeEffectiveMarks(numbers, drawnNumbers);
+  let minRemaining = GRID_SIZE * GRID_SIZE;
 
   for (const condition of activeConditions) {
-    const remaining = getRemainingCount(marked, condition);
+    const remaining = countRemainingForCondition(effective, condition);
     if (remaining < minRemaining) {
       minRemaining = remaining;
     }
   }
 
-  return minRemaining === Infinity ? GRID_SIZE : minRemaining;
+  return minRemaining;
 }
 
-function checkCondition(marked: MarkedGrid, condition: WinCondition): boolean {
+function countRemainingForCondition(marks: boolean[], condition: WinCondition): number {
   switch (condition) {
     case 'row':
-      return checkRows(marked) >= 1;
+      return bestLineRemaining(marks, 'row');
     case 'column':
-      return checkColumns(marked) >= 1;
+      return bestLineRemaining(marks, 'column');
     case 'diagonal':
-      return checkDiagonals(marked);
-    case 'two_rows':
-      return checkRows(marked) >= 2;
+      return bestDiagonalRemaining(marks);
     case 'full_board':
-      return checkFullBoard(marked);
-    case 'four_corners':
-      return checkFourCorners(marked);
-    case 'cross':
-      return checkCross(marked);
-    default:
-      return false;
+      return marks.filter(m => !m).length;
   }
 }
 
-function checkRows(marked: MarkedGrid): number {
-  let count = 0;
-  for (let row = 0; row < GRID_SIZE; row++) {
-    if (marked[row].every((cell) => cell)) count++;
+function bestLineRemaining(marks: boolean[], type: 'row' | 'column'): number {
+  let best = GRID_SIZE;
+  for (let i = 0; i < GRID_SIZE; i++) {
+    let unmarked = 0;
+    for (let j = 0; j < GRID_SIZE; j++) {
+      const index = type === 'row' ? i * GRID_SIZE + j : j * GRID_SIZE + i;
+      if (!marks[index]) unmarked++;
+    }
+    if (unmarked < best) best = unmarked;
   }
-  return count;
+  return best;
 }
 
-function checkColumns(marked: MarkedGrid): number {
-  let count = 0;
+function bestDiagonalRemaining(marks: boolean[]): number {
+  let d1 = 0;
+  let d2 = 0;
+  for (let i = 0; i < GRID_SIZE; i++) {
+    if (!marks[i * GRID_SIZE + i]) d1++;
+    if (!marks[i * GRID_SIZE + (GRID_SIZE - 1 - i)]) d2++;
+  }
+  return Math.min(d1, d2);
+}
+
+/**
+ * Validate that a coupon grid has correct format and values.
+ * Used for client-side pre-validation before Firestore write.
+ */
+export function isValidCouponGrid(grid: CouponGrid): boolean {
+  if (grid.length !== GRID_SIZE * GRID_SIZE) return false;
+
+  // Check free cell
+  if (grid[FREE_CELL_INDEX] !== 0) return false;
+
+  // Check each column
   for (let col = 0; col < GRID_SIZE; col++) {
-    let allMarked = true;
+    const min = col * 15 + 1;
+    const max = (col + 1) * 15;
+    const seen = new Set<number>();
+
     for (let row = 0; row < GRID_SIZE; row++) {
-      if (!marked[row][col]) { allMarked = false; break; }
+      const index = row * GRID_SIZE + col;
+      const val = grid[index]!;
+
+      // Skip free cell
+      if (index === FREE_CELL_INDEX) continue;
+
+      if (val < min || val > max) return false;
+      if (seen.has(val)) return false;
+      seen.add(val);
     }
-    if (allMarked) count++;
   }
-  return count;
-}
 
-function checkDiagonals(marked: MarkedGrid): boolean {
-  const diag1 = Array.from({ length: GRID_SIZE }, (_, i) => marked[i][i]).every(Boolean);
-  const diag2 = Array.from({ length: GRID_SIZE }, (_, i) => marked[i][GRID_SIZE - 1 - i]).every(Boolean);
-  return diag1 || diag2;
-}
-
-function checkFullBoard(marked: MarkedGrid): boolean {
-  return marked.every((row) => row.every((cell) => cell));
-}
-
-function checkFourCorners(marked: MarkedGrid): boolean {
-  return (
-    marked[0][0] &&
-    marked[0][GRID_SIZE - 1] &&
-    marked[GRID_SIZE - 1][0] &&
-    marked[GRID_SIZE - 1][GRID_SIZE - 1]
-  );
-}
-
-function checkCross(marked: MarkedGrid): boolean {
-  const mid = Math.floor(GRID_SIZE / 2);
-  const midRow = marked[mid].every((cell) => cell);
-  const midCol = Array.from({ length: GRID_SIZE }, (_, i) => marked[i][mid]).every(Boolean);
-  return midRow && midCol;
-}
-
-function getRemainingCount(marked: MarkedGrid, condition: WinCondition): number {
-  switch (condition) {
-    case 'row':
-      return Math.min(...Array.from({ length: GRID_SIZE }, (_, row) =>
-        marked[row].filter((c) => !c).length
-      ));
-    case 'column':
-      return Math.min(...Array.from({ length: GRID_SIZE }, (_, col) => {
-        let unmarked = 0;
-        for (let row = 0; row < GRID_SIZE; row++) {
-          if (!marked[row][col]) unmarked++;
-        }
-        return unmarked;
-      }));
-    case 'diagonal': {
-      const d1 = Array.from({ length: GRID_SIZE }, (_, i) => marked[i][i]).filter((c) => !c).length;
-      const d2 = Array.from({ length: GRID_SIZE }, (_, i) => marked[i][GRID_SIZE - 1 - i]).filter((c) => !c).length;
-      return Math.min(d1, d2);
-    }
-    case 'full_board':
-      return marked.flat().filter((c) => !c).length;
-    case 'four_corners': {
-      let count = 0;
-      if (!marked[0][0]) count++;
-      if (!marked[0][GRID_SIZE - 1]) count++;
-      if (!marked[GRID_SIZE - 1][0]) count++;
-      if (!marked[GRID_SIZE - 1][GRID_SIZE - 1]) count++;
-      return count;
-    }
-    default:
-      return GRID_SIZE;
-  }
+  return true;
 }

@@ -1,6 +1,13 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, connectAuthEmulator } from 'firebase/auth';
-import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  connectFirestoreEmulator,
+  getFirestore,
+} from 'firebase/firestore';
+import { getStorage, connectStorageEmulator } from 'firebase/storage';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -14,12 +21,31 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+
+// Initialize Firestore with persistent cache for offline support (non-emulator)
+const useEmulators = import.meta.env.VITE_USE_EMULATORS === 'true';
+
+function createFirestore() {
+  if (useEmulators) return getFirestore(app);
+  try {
+    return initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    });
+  } catch {
+    // Already initialized (HMR re-execution) — return existing instance
+    return getFirestore(app);
+  }
+}
+
+export const db = createFirestore();
+
+export const storage = getStorage(app);
 
 // Koble til emulatorer i utvikling
-if (import.meta.env.VITE_USE_EMULATORS === 'true') {
+if (useEmulators) {
   connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
   connectFirestoreEmulator(db, 'localhost', 8080);
+  connectStorageEmulator(storage, 'localhost', 9199);
 }
 
 export default app;

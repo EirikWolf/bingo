@@ -5,120 +5,208 @@ import {
   where,
   orderBy,
   onSnapshot,
-  type Query,
+  type DocumentReference,
+  type CollectionReference,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Location, Game, Coupon, Commitment, BingoClaim } from '@/types';
+import type { Location, Game, Coupon, BingoClaim, Commitment, User } from '@/types';
 
-// ============================================================
-// Samlingsreferanser
-// ============================================================
+// ─── Document references ─────────────────────────────────
 
-export const usersRef = () => collection(db, 'users');
-export const userRef = (uid: string) => doc(db, 'users', uid);
+export function userRef(uid: string): DocumentReference {
+  return doc(db, 'users', uid);
+}
 
-export const locationsRef = () => collection(db, 'locations');
-export const locationRef = (locationId: string) => doc(db, 'locations', locationId);
+export function locationRef(locationId: string): DocumentReference {
+  return doc(db, 'locations', locationId);
+}
 
-export const gamesRef = (locationId: string) =>
-  collection(db, 'locations', locationId, 'games');
-export const gameRef = (locationId: string, gameId: string) =>
-  doc(db, 'locations', locationId, 'games', gameId);
+export function gameRef(locationId: string, gameId: string): DocumentReference {
+  return doc(db, 'locations', locationId, 'games', gameId);
+}
 
-export const couponsRef = (locationId: string, gameId: string) =>
-  collection(db, 'locations', locationId, 'games', gameId, 'coupons');
-export const couponRef = (locationId: string, gameId: string, couponId: string) =>
-  doc(db, 'locations', locationId, 'games', gameId, 'coupons', couponId);
+export function couponRef(locationId: string, gameId: string, couponId: string): DocumentReference {
+  return doc(db, 'locations', locationId, 'games', gameId, 'coupons', couponId);
+}
 
-export const bingoClaimsRef = (locationId: string, gameId: string) =>
-  collection(db, 'locations', locationId, 'games', gameId, 'bingo_claims');
-export const bingoClaimRef = (locationId: string, gameId: string, claimId: string) =>
-  doc(db, 'locations', locationId, 'games', gameId, 'bingo_claims', claimId);
+// ─── Collection references ───────────────────────────────
 
-export const commitmentsRef = () => collection(db, 'commitments');
+export function locationsCol(): CollectionReference {
+  return collection(db, 'locations');
+}
 
-// ============================================================
-// Queries
-// ============================================================
+export function gamesCol(locationId: string): CollectionReference {
+  return collection(db, 'locations', locationId, 'games');
+}
 
-export const activeGameQuery = (locationId: string): Query =>
-  query(gamesRef(locationId), where('status', 'in', ['open', 'active', 'paused']), orderBy('createdAt', 'desc'));
+export function couponsCol(locationId: string, gameId: string): CollectionReference {
+  return collection(db, 'locations', locationId, 'games', gameId, 'coupons');
+}
 
-export const userCouponsQuery = (locationId: string, gameId: string, userId: string): Query =>
-  query(couponsRef(locationId, gameId), where('userId', '==', userId));
+export function claimsCol(locationId: string, gameId: string): CollectionReference {
+  return collection(db, 'locations', locationId, 'games', gameId, 'bingo_claims');
+}
 
-export const userCommitmentsQuery = (userId: string): Query =>
-  query(commitmentsRef(), where('userId', '==', userId), orderBy('createdAt', 'desc'));
+export function commitmentsCol(): CollectionReference {
+  return collection(db, 'commitments');
+}
 
-export const locationCommitmentsQuery = (locationId: string): Query =>
-  query(commitmentsRef(), where('locationId', '==', locationId), orderBy('createdAt', 'desc'));
+// ─── Realtime listeners ──────────────────────────────────
 
-export const pendingClaimsQuery = (locationId: string, gameId: string): Query =>
-  query(bingoClaimsRef(locationId, gameId), where('status', '==', 'pending'));
-
-// ============================================================
-// Sanntidslyttere (returnerer unsubscribe-funksjon)
-// ============================================================
-
-export function listenToLocations(callback: (locations: Location[]) => void): () => void {
-  return onSnapshot(locationsRef(), (snapshot) => {
-    const locations = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Location);
+/** Listen to all locations */
+export function listenToLocations(
+  callback: (locations: Location[]) => void
+): () => void {
+  const q = query(locationsCol(), orderBy('name'));
+  return onSnapshot(q, (snap) => {
+    const locations = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Location);
     callback(locations);
+  }, (error) => {
+    console.error('listenToLocations error:', error);
+    callback([]);
   });
 }
 
+/** Listen to a single location */
+export function listenToLocation(
+  locationId: string,
+  callback: (location: Location | null) => void
+): () => void {
+  return onSnapshot(locationRef(locationId), (snap) => {
+    if (snap.exists()) {
+      callback({ id: snap.id, ...snap.data() } as Location);
+    } else {
+      callback(null);
+    }
+  }, (error) => {
+    console.error('listenToLocation error:', error);
+    callback(null);
+  });
+}
+
+/** Listen to a specific game */
 export function listenToGame(
   locationId: string,
   gameId: string,
   callback: (game: Game | null) => void
 ): () => void {
-  return onSnapshot(gameRef(locationId, gameId), (snapshot) => {
-    callback(snapshot.exists() ? ({ id: snapshot.id, ...snapshot.data() } as Game) : null);
-  });
-}
-
-export function listenToActiveGame(
-  locationId: string,
-  callback: (game: Game | null) => void
-): () => void {
-  return onSnapshot(activeGameQuery(locationId), (snapshot) => {
-    if (snapshot.empty) {
-      callback(null);
+  return onSnapshot(gameRef(locationId, gameId), (snap) => {
+    if (snap.exists()) {
+      callback({ id: snap.id, ...snap.data() } as Game);
     } else {
-      const firstDoc = snapshot.docs[0];
-      callback({ id: firstDoc.id, ...firstDoc.data() } as Game);
+      callback(null);
     }
+  }, (error) => {
+    console.error('listenToGame error:', error);
+    callback(null);
   });
 }
 
+/** Listen to a user's coupons for a specific game */
 export function listenToUserCoupons(
   locationId: string,
   gameId: string,
   userId: string,
   callback: (coupons: Coupon[]) => void
 ): () => void {
-  return onSnapshot(userCouponsQuery(locationId, gameId, userId), (snapshot) => {
-    const coupons = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Coupon);
+  const q = query(
+    couponsCol(locationId, gameId),
+    where('userId', '==', userId),
+    orderBy('purchasedAt', 'desc')
+  );
+  return onSnapshot(q, (snap) => {
+    const coupons = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Coupon);
     callback(coupons);
+  }, (error) => {
+    console.error('listenToUserCoupons error:', error);
+    callback([]);
   });
 }
 
-export function listenToLocation(
+/** Listen to all coupons for a game (admin use) */
+export function listenToGameCoupons(
   locationId: string,
-  callback: (location: Location | null) => void
+  gameId: string,
+  callback: (coupons: Coupon[]) => void
 ): () => void {
-  return onSnapshot(locationRef(locationId), (snapshot) => {
-    callback(snapshot.exists() ? ({ id: snapshot.id, ...snapshot.data() } as Location) : null);
+  const q = query(couponsCol(locationId, gameId), orderBy('purchasedAt', 'desc'));
+  return onSnapshot(q, (snap) => {
+    const coupons = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Coupon);
+    callback(coupons);
+  }, (error) => {
+    console.error('listenToGameCoupons error:', error);
+    callback([]);
   });
 }
 
+/** Listen to pending bingo claims for a game */
 export function listenToPendingClaims(
   locationId: string,
   gameId: string,
   callback: (claims: BingoClaim[]) => void
 ): () => void {
-  return onSnapshot(pendingClaimsQuery(locationId, gameId), (snapshot) => {
-    const claims = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as BingoClaim);
+  const q = query(
+    claimsCol(locationId, gameId),
+    where('status', '==', 'pending'),
+    orderBy('claimedAt', 'desc')
+  );
+  return onSnapshot(q, (snap) => {
+    const claims = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as BingoClaim);
     callback(claims);
+  }, (error) => {
+    console.error('listenToPendingClaims error:', error);
+    callback([]);
+  });
+}
+
+/** Listen to commitments for a user */
+export function listenToUserCommitments(
+  userId: string,
+  callback: (commitments: Commitment[]) => void
+): () => void {
+  const q = query(
+    commitmentsCol(),
+    where('userId', '==', userId),
+    orderBy('createdAt', 'desc')
+  );
+  return onSnapshot(q, (snap) => {
+    const commitments = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Commitment);
+    callback(commitments);
+  }, (error) => {
+    console.error('listenToUserCommitments error:', error);
+    callback([]);
+  });
+}
+
+/** Listen to commitments for a location (admin use) */
+export function listenToLocationCommitments(
+  locationId: string,
+  callback: (commitments: Commitment[]) => void
+): () => void {
+  const q = query(
+    commitmentsCol(),
+    where('locationId', '==', locationId),
+    orderBy('createdAt', 'desc')
+  );
+  return onSnapshot(q, (snap) => {
+    const commitments = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Commitment);
+    callback(commitments);
+  }, (error) => {
+    console.error('listenToLocationCommitments error:', error);
+    callback([]);
+  });
+}
+
+/** Listen to all users (superadmin use) */
+export function listenToAllUsers(
+  callback: (users: User[]) => void
+): () => void {
+  const q = query(collection(db, 'users'), orderBy('displayName'));
+  return onSnapshot(q, (snap) => {
+    const users = snap.docs.map((d) => ({ ...d.data(), uid: d.id }) as User);
+    callback(users);
+  }, (error) => {
+    console.error('listenToAllUsers error:', error);
+    callback([]);
   });
 }

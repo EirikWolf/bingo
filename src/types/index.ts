@@ -1,15 +1,34 @@
 import { Timestamp } from 'firebase/firestore';
 
-// ============================================================
-// Brukerroller
-// ============================================================
-
+// ─── Roles ───────────────────────────────────────────────
 export type UserRole = 'player' | 'admin' | 'superadmin';
 
+// ─── Win conditions ──────────────────────────────────────
+export type WinCondition = 'row' | 'column' | 'diagonal' | 'full_board';
+
+// ─── Game status machine ─────────────────────────────────
+// setup → open → active ↔ paused
+//                  ↓         ↓
+//              finished  finished
+export type GameStatus = 'setup' | 'open' | 'active' | 'paused' | 'finished';
+
+// ─── Claim status ────────────────────────────────────────
+export type ClaimStatus = 'pending' | 'approved' | 'rejected';
+
+// ─── Commitment status ───────────────────────────────────
+export type CommitmentStatus = 'pending' | 'confirmed' | 'overdue' | 'cancelled';
+
+// ─── Coupon grid types ───────────────────────────────────
+// Flat 25-element arrays to avoid Firestore nested-array limitation
+export type CouponGrid = number[];       // length 25, row-major order
+export type MarkedGrid = boolean[];      // length 25, row-major order
+
+// ─── Users ───────────────────────────────────────────────
 export interface User {
   uid: string;
   displayName: string;
   email: string | null;
+  phone: string | null;
   photoURL: string | null;
   role: UserRole;
   activeLocationId: string | null;
@@ -17,23 +36,17 @@ export interface User {
   lastActiveAt: Timestamp;
 }
 
-// ============================================================
-// Lokasjoner
-// ============================================================
-
-export type WinCondition =
-  | 'row'
-  | 'column'
-  | 'diagonal'
-  | 'two_rows'
-  | 'full_board'
-  | 'four_corners'
-  | 'cross';
-
+// ─── Locations ───────────────────────────────────────────
 export interface CommitmentLevel {
-  id: string;
+  label: string;
   description: string;
-  couponsGranted: number;
+}
+
+export interface SpeechSettings {
+  enabled: boolean;
+  voiceURI: string | null;
+  rate: number;   // 0.5 - 2.0
+  volume: number; // 0.0 - 1.0
 }
 
 export interface LocationSettings {
@@ -44,6 +57,10 @@ export interface LocationSettings {
   autoDrawEnabled: boolean;
   autoDrawIntervalMs: number;
   winConditions: WinCondition[];
+  vippsNumber: string | null;
+  vippsDefaultAmount: number | null;
+  reminderEnabled: boolean;
+  speech: SpeechSettings;
 }
 
 export interface Location {
@@ -60,18 +77,12 @@ export interface Location {
   updatedAt: Timestamp;
 }
 
-// ============================================================
-// Spill
-// ============================================================
-
-export type GameStatus = 'setup' | 'open' | 'active' | 'paused' | 'finished';
-
+// ─── Games ───────────────────────────────────────────────
 export interface Winner {
   userId: string;
   displayName: string;
   couponId: string;
   winCondition: WinCondition;
-  claimedAt: Timestamp;
 }
 
 export interface Game {
@@ -85,64 +96,47 @@ export interface Game {
   couponCount: number;
   playerCount: number;
   commitment: string;
+  autoDrawActive: boolean;
+  autoDrawIntervalMs: number;
+  lastDrawAt: Timestamp | null;
   createdAt: Timestamp;
   startedAt: Timestamp | null;
   finishedAt: Timestamp | null;
 }
 
-// ============================================================
-// Kuponger
-// ============================================================
-
-/** 5x5 matrise. numbers[rad][kolonne]. Sentrum (2,2) = 0 (fri rute). */
-export type CouponGrid = number[][];
-
-/** 5x5 matrise. true = markert. Sentrum alltid true. */
-export type MarkedGrid = boolean[][];
-
+// ─── Coupons ─────────────────────────────────────────────
 export interface Coupon {
   id: string;
   userId: string;
   userDisplayName: string;
-  numbers: CouponGrid;
-  markedCells: MarkedGrid;
+  numbers: CouponGrid;           // flat 25 elements, row-major
+  markedCells: MarkedGrid;       // flat 25 elements, row-major
   commitmentId: string;
   isWinner: boolean;
   winCondition: WinCondition | null;
   purchasedAt: Timestamp;
 }
 
-// ============================================================
-// Bingo-rop (erstatter Cloud Function-validering)
-// ============================================================
-
-export type BingoClaimStatus = 'pending' | 'approved' | 'rejected';
-
+// ─── Bingo claims ────────────────────────────────────────
 export interface BingoClaim {
   id: string;
   userId: string;
   userDisplayName: string;
   couponId: string;
-  status: BingoClaimStatus;
-  /** Klientsiden foreslår gevinsttype, admin bekrefter */
+  status: ClaimStatus;
   suggestedWinCondition: WinCondition | null;
-  /** Admin setter endelig gevinsttype ved godkjenning */
   approvedWinCondition: WinCondition | null;
   reviewedBy: string | null;
   reviewedAt: Timestamp | null;
   claimedAt: Timestamp;
 }
 
-// ============================================================
-// Forpliktelser
-// ============================================================
-
-export type CommitmentStatus = 'pending' | 'confirmed' | 'overdue' | 'cancelled';
-
+// ─── Commitments ─────────────────────────────────────────
 export interface Commitment {
   id: string;
   userId: string;
   userDisplayName: string;
+  userPhone: string | null;
   locationId: string;
   locationName: string;
   gameId: string;
@@ -155,19 +149,5 @@ export interface Commitment {
   createdAt: Timestamp;
 }
 
-// ============================================================
-// Bingo-konfigurasjonstyper
-// ============================================================
-
-export const BINGO_COLUMNS = {
-  B: { index: 0, min: 1, max: 15 },
-  I: { index: 1, min: 16, max: 30 },
-  N: { index: 2, min: 31, max: 45 },
-  G: { index: 3, min: 46, max: 60 },
-  O: { index: 4, min: 61, max: 75 },
-} as const;
-
-export const TOTAL_NUMBERS = 75;
-export const GRID_SIZE = 5;
-export const FREE_SPACE_ROW = 2;
-export const FREE_SPACE_COL = 2;
+// Re-export grid constants from the canonical source
+export { GRID_SIZE } from '@/utils/constants';

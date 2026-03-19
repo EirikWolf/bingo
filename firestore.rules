@@ -1,235 +1,222 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ============================================================
-    // Hjelpefunksjoner
-    // ============================================================
+    // ─── Helper functions ──────────────────────────────────
 
     function isAuthenticated() {
       return request.auth != null;
     }
 
     function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+      return request.auth.uid == userId;
     }
 
-    function getUserRole() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
     function isSuperAdmin() {
-      return isAuthenticated() && getUserRole() == 'superadmin';
+      return isAuthenticated() && getUserData().role == 'superadmin';
+    }
+
+    function getLocationData(locationId) {
+      return get(/databases/$(database)/documents/locations/$(locationId)).data;
     }
 
     function isLocationAdmin(locationId) {
-      return isAuthenticated()
-        && request.auth.uid in get(/databases/$(database)/documents/locations/$(locationId)).data.adminUids;
+      return isAuthenticated() && (
+        request.auth.uid in getLocationData(locationId).adminUids
+        || isSuperAdmin()
+      );
     }
 
-    function isLocationAdminOrSuper(locationId) {
-      return isSuperAdmin() || isLocationAdmin(locationId);
+    function getGameData(locationId, gameId) {
+      return get(/databases/$(database)/documents/locations/$(locationId)/games/$(gameId)).data;
     }
 
-    function getGame(locationId, gameId) {
-      return get(/databases/$(database)/documents/locations/$(locationId)/games/$(gameId));
-    }
-
-    // ============================================================
-    // Kupongvalidering — erstatter Cloud Function
-    // Sikrer at klienten ikke kan sende ugyldig kupong
-    // ============================================================
+    // ─── Coupon grid validation ────────────────────────────
+    // Coupons use flat 25-element arrays (row-major order)
+    // index = row * 5 + col
+    // Column ranges: B(1-15), I(16-30), N(31-45), G(46-60), O(61-75)
 
     function isValidCouponGrid(numbers) {
-      // Må være en liste med 5 rader
       return numbers is list
-        && numbers.size() == 5
-        // Hver rad må ha 5 elementer
-        && numbers[0].size() == 5
-        && numbers[1].size() == 5
-        && numbers[2].size() == 5
-        && numbers[3].size() == 5
-        && numbers[4].size() == 5
-        // Sentrum (rad 2, kolonne 2) må være 0 (fri rute)
-        && numbers[2][2] == 0
-        // Sjekk tallområder per kolonne (B:1-15, I:16-30, N:31-45, G:46-60, O:61-75)
-        && isValidColumn(numbers, 0, 1, 15)
-        && isValidColumn(numbers, 1, 16, 30)
-        && isValidNColumn(numbers, 2, 31, 45)
-        && isValidColumn(numbers, 3, 46, 60)
-        && isValidColumn(numbers, 4, 61, 75);
+        && numbers.size() == 25
+        // Free cell at index 12 (row 2, col 2)
+        && numbers[12] == 0
+        // Column B (indices 0,5,10,15,20) — range 1-15
+        && isValidColumnValues(numbers[0], numbers[5], numbers[10], numbers[15], numbers[20], 1, 15)
+        // Column I (indices 1,6,11,16,21) — range 16-30
+        && isValidColumnValues(numbers[1], numbers[6], numbers[11], numbers[16], numbers[21], 16, 30)
+        // Column N (indices 2,7,*12*,17,22) — range 31-45, skip index 12 (free)
+        && isValidNColumn(numbers[2], numbers[7], numbers[17], numbers[22], 31, 45)
+        // Column G (indices 3,8,13,18,23) — range 46-60
+        && isValidColumnValues(numbers[3], numbers[8], numbers[13], numbers[18], numbers[23], 46, 60)
+        // Column O (indices 4,9,14,19,24) — range 61-75
+        && isValidColumnValues(numbers[4], numbers[9], numbers[14], numbers[19], numbers[24], 61, 75);
     }
 
-    function isValidColumn(numbers, col, minVal, maxVal) {
-      return numbers[0][col] >= minVal && numbers[0][col] <= maxVal
-        && numbers[1][col] >= minVal && numbers[1][col] <= maxVal
-        && numbers[2][col] >= minVal && numbers[2][col] <= maxVal
-        && numbers[3][col] >= minVal && numbers[3][col] <= maxVal
-        && numbers[4][col] >= minVal && numbers[4][col] <= maxVal
-        // Alle tall må være unike (parvise sjekker)
-        && numbers[0][col] != numbers[1][col]
-        && numbers[0][col] != numbers[2][col]
-        && numbers[0][col] != numbers[3][col]
-        && numbers[0][col] != numbers[4][col]
-        && numbers[1][col] != numbers[2][col]
-        && numbers[1][col] != numbers[3][col]
-        && numbers[1][col] != numbers[4][col]
-        && numbers[2][col] != numbers[3][col]
-        && numbers[2][col] != numbers[4][col]
-        && numbers[3][col] != numbers[4][col];
+    function isValidColumnValues(a, b, c, d, e, min, max) {
+      return a is int && b is int && c is int && d is int && e is int
+        && a >= min && a <= max
+        && b >= min && b <= max
+        && c >= min && c <= max
+        && d >= min && d <= max
+        && e >= min && e <= max
+        && a != b && a != c && a != d && a != e
+        && b != c && b != d && b != e
+        && c != d && c != e
+        && d != e;
     }
 
-    function isValidNColumn(numbers, col, minVal, maxVal) {
-      // N-kolonnen har fri rute (0) i rad 2, så kun 4 tall å sjekke
-      return numbers[0][col] >= minVal && numbers[0][col] <= maxVal
-        && numbers[1][col] >= minVal && numbers[1][col] <= maxVal
-        // numbers[2][col] == 0 (fri rute, sjekket i isValidCouponGrid)
-        && numbers[3][col] >= minVal && numbers[3][col] <= maxVal
-        && numbers[4][col] >= minVal && numbers[4][col] <= maxVal
-        && numbers[0][col] != numbers[1][col]
-        && numbers[0][col] != numbers[3][col]
-        && numbers[0][col] != numbers[4][col]
-        && numbers[1][col] != numbers[3][col]
-        && numbers[1][col] != numbers[4][col]
-        && numbers[3][col] != numbers[4][col];
+    function isValidNColumn(a, b, d, e, min, max) {
+      // N-column has 4 values (row 0,1,3,4) — row 2 is free cell
+      return a is int && b is int && d is int && e is int
+        && a >= min && a <= max
+        && b >= min && b <= max
+        && d >= min && d <= max
+        && e >= min && e <= max
+        && a != b && a != d && a != e
+        && b != d && b != e
+        && d != e;
     }
 
-    function isValidMarkedGrid(markedCells) {
-      return markedCells is list
-        && markedCells.size() == 5
-        && markedCells[0].size() == 5
-        && markedCells[1].size() == 5
-        && markedCells[2].size() == 5
-        && markedCells[3].size() == 5
-        && markedCells[4].size() == 5
-        // Sentrum alltid markert
-        && markedCells[2][2] == true;
+    function isValidMarkedGrid(marked) {
+      return marked is list
+        && marked.size() == 25
+        && marked[12] == true;
     }
 
-    // ============================================================
-    // Brukere
-    // ============================================================
+    // ─── Valid status transitions ──────────────────────────
+
+    function isValidStatusTransition(oldStatus, newStatus) {
+      return (oldStatus == 'setup' && newStatus == 'open')
+        || (oldStatus == 'open' && newStatus == 'active')
+        || (oldStatus == 'active' && (newStatus == 'paused' || newStatus == 'finished'))
+        || (oldStatus == 'paused' && (newStatus == 'active' || newStatus == 'finished'));
+    }
+
+    // ─── Users ─────────────────────────────────────────────
 
     match /users/{userId} {
       allow read: if isAuthenticated();
 
-      // Bruker kan opprette sin egen profil med rolle 'player'
-      allow create: if isOwner(userId)
+      allow create: if isAuthenticated()
+        && isOwner(userId)
         && request.resource.data.role == 'player'
-        && request.resource.data.keys().hasAll(['uid', 'displayName', 'role', 'createdAt']);
+        && request.resource.data.uid == userId
+        && request.resource.data.keys().hasAll(['uid', 'displayName', 'email', 'role', 'createdAt']);
 
-      // Bruker kan oppdatere sin egen profil (ikke endre rolle)
-      allow update: if isOwner(userId)
+      // Owner can update own fields except role
+      allow update: if isAuthenticated()
+        && isOwner(userId)
         && request.resource.data.role == resource.data.role;
 
-      // Superadmin kan oppdatere alle (inkl. rolleendring)
+      // Superadmin can update anything including role
       allow update: if isSuperAdmin();
 
       allow delete: if false;
     }
 
-    // ============================================================
-    // Lokasjoner
-    // ============================================================
+    // ─── Locations ─────────────────────────────────────────
 
     match /locations/{locationId} {
       allow read: if isAuthenticated();
       allow create: if isSuperAdmin();
-      allow update: if isLocationAdminOrSuper(locationId);
+      allow update: if isLocationAdmin(locationId);
       allow delete: if isSuperAdmin();
 
-      // ============================================================
-      // Spill
-      // ============================================================
+      // ─── Games ───────────────────────────────────────────
 
       match /games/{gameId} {
         allow read: if isAuthenticated();
 
-        // Admin kan opprette spill
-        allow create: if isLocationAdminOrSuper(locationId)
+        allow create: if isLocationAdmin(locationId)
           && request.resource.data.status == 'setup'
-          && request.resource.data.drawnNumbers.size() == 0;
+          && request.resource.data.drawnNumbers.size() == 0
+          && request.resource.data.winners.size() == 0
+          && request.resource.data.keys().hasAll([
+              'status', 'drawnNumbers', 'currentNumber', 'totalNumbers',
+              'winConditions', 'winners', 'couponCount', 'playerCount',
+              'commitment', 'createdAt'
+            ]);
 
-        // Admin kan oppdatere spill (status, trekke tall, legge til vinner)
-        allow update: if isLocationAdminOrSuper(locationId);
+        // Admin can update any field
+        allow update: if isLocationAdmin(locationId);
+
+        // Players can increment couponCount when game is open for purchase
+        allow update: if isAuthenticated()
+          && resource.data.status == 'open'
+          && request.resource.data.couponCount == resource.data.couponCount + 1
+          && request.resource.data.status == resource.data.status
+          && request.resource.data.drawnNumbers == resource.data.drawnNumbers
+          && request.resource.data.winners == resource.data.winners;
 
         allow delete: if false;
 
-        // ============================================================
-        // Kuponger — opprettes av spillere, valideres av regler
-        // ============================================================
+        // ─── Coupons ─────────────────────────────────────
 
         match /coupons/{couponId} {
-          // Spiller ser egne kuponger, admin ser alle
+          // Owner or location admin can read
           allow read: if isAuthenticated()
-            && (resource.data.userId == request.auth.uid
-                || isLocationAdminOrSuper(locationId));
+            && (isOwner(resource.data.userId) || isLocationAdmin(locationId));
 
-          // Spiller kan opprette kupong HVIS:
           allow create: if isAuthenticated()
-            // Eierskap
             && request.resource.data.userId == request.auth.uid
-            // Spillet er åpent for kjøp
-            && getGame(locationId, gameId).data.status == 'open'
-            // Kupongen har gyldig format
+            && getGameData(locationId, gameId).status == 'open'
             && isValidCouponGrid(request.resource.data.numbers)
             && isValidMarkedGrid(request.resource.data.markedCells)
-            // Ikke allerede vinner
             && request.resource.data.isWinner == false
             && request.resource.data.winCondition == null
-            // Har påkrevde felt
             && request.resource.data.keys().hasAll([
                 'userId', 'userDisplayName', 'numbers', 'markedCells',
                 'commitmentId', 'isWinner', 'winCondition', 'purchasedAt'
               ]);
 
-          // Ingen kan oppdatere kuponger direkte
-          // (vinnerstatus settes via bingo_claims + admin-godkjenning)
-          allow update: if false;
+          // Coupons are immutable after creation (except admin marking winner)
+          allow update: if isLocationAdmin(locationId);
 
           allow delete: if false;
         }
 
-        // ============================================================
-        // Bingo-rop — spillere sender, admin godkjenner
-        // ============================================================
+        // ─── Bingo Claims ────────────────────────────────
 
         match /bingo_claims/{claimId} {
+          // Owner or location admin can read
           allow read: if isAuthenticated()
-            && (resource.data.userId == request.auth.uid
-                || isLocationAdminOrSuper(locationId));
+            && (isOwner(resource.data.userId) || isLocationAdmin(locationId));
 
-          // Spiller kan sende bingo-rop
           allow create: if isAuthenticated()
             && request.resource.data.userId == request.auth.uid
             && request.resource.data.status == 'pending'
-            && getGame(locationId, gameId).data.status == 'active'
+            && getGameData(locationId, gameId).status == 'active'
             && request.resource.data.keys().hasAll([
-                'userId', 'userDisplayName', 'couponId', 'status', 'claimedAt'
+                'userId', 'userDisplayName', 'couponId', 'status',
+                'suggestedWinCondition', 'claimedAt'
               ]);
 
-          // Kun admin kan oppdatere (godkjenne/avvise)
-          allow update: if isLocationAdminOrSuper(locationId)
-            && request.resource.data.status in ['approved', 'rejected'];
+          // Only admin can approve/reject (not the claim owner)
+          allow update: if isLocationAdmin(locationId)
+            && !isOwner(resource.data.userId)
+            && (request.resource.data.status == 'approved' || request.resource.data.status == 'rejected');
 
           allow delete: if false;
         }
       }
     }
 
-    // ============================================================
-    // Forpliktelser
-    // ============================================================
+    // ─── Commitments (top-level) ─────────────────────────
 
     match /commitments/{commitmentId} {
-      // Spiller leser egne, admin leser for sin lokasjon, superadmin leser alle
+      // Owner, location admin, or superadmin can read
       allow read: if isAuthenticated()
-        && (resource.data.userId == request.auth.uid
-            || isLocationAdmin(resource.data.locationId)
-            || isSuperAdmin());
+        && (
+          isOwner(resource.data.userId)
+          || isLocationAdmin(resource.data.locationId)
+          || isSuperAdmin()
+        );
 
-      // Spiller kan opprette forpliktelse (ved kupongkjøp)
       allow create: if isAuthenticated()
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.status == 'pending'
@@ -238,23 +225,16 @@ service cloud.firestore {
             'gameId', 'couponId', 'description', 'status', 'createdAt'
           ]);
 
-      // Admin kan oppdatere status (bekrefte, kansellere)
+      // Location admin can update status, but not change userId
       allow update: if isLocationAdmin(resource.data.locationId)
-        && request.resource.data.status in ['confirmed', 'cancelled']
-        && request.resource.data.userId == resource.data.userId;
+        && request.resource.data.userId == resource.data.userId
+        && (request.resource.data.status == 'confirmed' || request.resource.data.status == 'cancelled');
 
-      // Superadmin kan også oppdatere
+      // Superadmin can update anything
       allow update: if isSuperAdmin();
 
+      // Players cannot change their own commitments
       allow delete: if false;
-    }
-
-    // ============================================================
-    // Catch-all
-    // ============================================================
-
-    match /{document=**} {
-      allow read, write: if false;
     }
   }
 }

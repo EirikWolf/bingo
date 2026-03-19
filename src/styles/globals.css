@@ -4,43 +4,44 @@
 
 @layer base {
   html {
-    font-family: 'Inter', system-ui, sans-serif;
     -webkit-tap-highlight-color: transparent;
   }
 
-  /* Storskjerm: skjul scrollbar */
-  .hide-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-  .hide-scrollbar::-webkit-scrollbar {
-    display: none;
+  body {
+    @apply min-h-screen bg-gray-50 font-display text-gray-900;
   }
 }
 
 @layer components {
-  /* Bingo-ball sirkel */
-  .bingo-ball {
-    @apply flex h-12 w-12 items-center justify-center rounded-full
-           text-lg font-bold text-white shadow-md transition-transform;
+  /* Bingo coupon grid */
+  .bingo-grid {
+    @apply grid grid-cols-5 gap-1;
   }
 
-  .bingo-ball-lg {
-    @apply flex h-24 w-24 items-center justify-center rounded-full
-           text-4xl font-extrabold text-white shadow-xl;
+  .bingo-cell {
+    @apply flex aspect-square items-center justify-center rounded-lg text-lg font-bold transition-all duration-200;
   }
 
-  /* Kupong-rute */
-  .coupon-cell {
-    @apply flex aspect-square items-center justify-center rounded-lg
-           border-2 border-gray-200 text-lg font-semibold transition-all;
+  .bingo-cell-marked {
+    @apply bg-bingo-500 text-white shadow-md;
   }
 
-  .coupon-cell-marked {
-    @apply border-bingo-500 bg-bingo-500 text-white shadow-inner;
+  .bingo-cell-unmarked {
+    @apply bg-white text-gray-700 border border-gray-200;
   }
 
-  .coupon-cell-free {
-    @apply border-bingo-300 bg-bingo-100 text-bingo-600;
+  .bingo-cell-free {
+    @apply bg-bingo-100 text-bingo-700 border border-bingo-300;
+  }
+
+  /* Number ball */
+  .number-ball {
+    @apply flex items-center justify-center rounded-full font-bold text-white shadow-lg;
+  }
+
+  /* Big screen number display */
+  .big-number {
+    @apply flex h-40 w-40 items-center justify-center rounded-full text-6xl font-extrabold text-white shadow-2xl lg:h-60 lg:w-60 lg:text-8xl;
   }
 }
+

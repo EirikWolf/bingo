@@ -1,59 +1,71 @@
 import { create } from 'zustand';
-import type { User as FirebaseUser } from 'firebase/auth';
+import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '@/services/firebase';
-import { onAuthChange } from '@/services/auth';
-import type { User, UserRole } from '@/types';
+import { auth, db } from '@/services/firebase';
+import type { User } from '@/types';
 
 interface AuthState {
   firebaseUser: FirebaseUser | null;
-  userProfile: User | null;
+  user: User | null;
   loading: boolean;
-  initialized: boolean;
-  init: () => () => void;
+  error: string | null;
+  initialize: () => () => void;
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
+export const useAuthStore = create<AuthState>((set) => ({
   firebaseUser: null,
-  userProfile: null,
+  user: null,
   loading: true,
-  initialized: false,
+  error: null,
 
-  init: () => {
-    if (get().initialized) return () => {};
+  initialize: () => {
+    let unsubUser: (() => void) | null = null;
+    let currentUid: string | null = null;
 
-    let profileUnsub: (() => void) | null = null;
-
-    const authUnsub = onAuthChange((firebaseUser) => {
-      if (profileUnsub) {
-        profileUnsub();
-        profileUnsub = null;
+    const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      // Skip if same user (token renewal — don't flash loading)
+      if (firebaseUser && firebaseUser.uid === currentUid) {
+        set({ firebaseUser });
+        return;
       }
+
+      // Clean up previous Firestore listener
+      if (unsubUser) {
+        unsubUser();
+        unsubUser = null;
+      }
+
+      currentUid = firebaseUser?.uid ?? null;
 
       if (firebaseUser) {
         set({ firebaseUser, loading: true });
 
-        profileUnsub = onSnapshot(doc(db, 'users', firebaseUser.uid), (snap) => {
-          const userProfile = snap.exists()
-            ? ({ id: snap.id, ...snap.data() } as unknown as User)
-            : null;
-          set({ userProfile, loading: false });
-        });
+        // Listen to user document in Firestore
+        unsubUser = onSnapshot(
+          doc(db, 'users', firebaseUser.uid),
+          (snap) => {
+            if (snap.exists()) {
+              const userData = { ...snap.data(), uid: snap.id } as User;
+              set({ user: userData, loading: false, error: null });
+            } else {
+              // User document not yet created (race condition)
+              set({ user: null, loading: false });
+            }
+          },
+          (error) => {
+            console.error('User document listener error:', error);
+            set({ error: error.message, loading: false });
+          }
+        );
       } else {
-        set({ firebaseUser: null, userProfile: null, loading: false });
+        set({ firebaseUser: null, user: null, loading: false, error: null });
       }
     });
 
-    set({ initialized: true });
-
+    // Return cleanup function
     return () => {
-      authUnsub();
-      if (profileUnsub) profileUnsub();
+      unsubAuth();
+      if (unsubUser) unsubUser();
     };
   },
 }));
-
-// Hjelpefunksjoner
-export const useIsAuthenticated = () => useAuthStore((s) => s.firebaseUser !== null);
-export const useUserRole = (): UserRole | null => useAuthStore((s) => s.userProfile?.role ?? null);
-export const useUserId = (): string | null => useAuthStore((s) => s.firebaseUser?.uid ?? null);

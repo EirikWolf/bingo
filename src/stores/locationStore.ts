@@ -1,21 +1,28 @@
 import { create } from 'zustand';
+import { listenToLocations } from '@/services/firestore';
 import type { Location } from '@/types';
 
 interface LocationState {
   locations: Location[];
-  currentLocation: Location | null;
   loading: boolean;
-  setLocations: (locations: Location[]) => void;
-  setCurrentLocation: (location: Location | null) => void;
-  setLoading: (loading: boolean) => void;
+  selectedLocationId: string | null;
+  initialize: () => () => void;
+  selectLocation: (locationId: string) => void;
 }
 
 export const useLocationStore = create<LocationState>((set) => ({
   locations: [],
-  currentLocation: null,
   loading: true,
+  selectedLocationId: null,
 
-  setLocations: (locations) => set({ locations, loading: false }),
-  setCurrentLocation: (location) => set({ currentLocation: location }),
-  setLoading: (loading) => set({ loading }),
+  initialize: () => {
+    const unsub = listenToLocations((locations) => {
+      set({ locations, loading: false });
+    });
+    return unsub;
+  },
+
+  selectLocation: (locationId: string) => {
+    set({ selectedLocationId: locationId });
+  },
 }));

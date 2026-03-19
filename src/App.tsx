@@ -1,44 +1,57 @@
 import { useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
-
-// Placeholder-sider — erstattes med ekte komponenter
-function Placeholder({ title }: { title: string }) {
-  return (
-    <div className="flex min-h-screen items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold text-bingo-800">{title}</h1>
-        <p className="mt-2 text-gray-500">Under utvikling</p>
-      </div>
-    </div>
-  );
-}
+import { Spinner } from '@/components/ui/Spinner';
+import LoginPage from './pages/LoginPage';
+import HomePage from './pages/HomePage';
+import GamePage from './pages/GamePage';
+import BigScreenPage from './pages/BigScreenPage';
+import AdminPage from './pages/AdminPage';
+import SuperAdminPage from './pages/SuperAdminPage';
+import ProfilePage from './pages/ProfilePage';
+import DevAdminPage from './pages/DevAdminPage';
+import { InstallPrompt } from '@/components/ui/InstallPrompt';
 
 export default function App() {
-  const init = useAuthStore((s) => s.init);
-  const loading = useAuthStore((s) => s.loading);
+  const { firebaseUser, loading, initialize } = useAuthStore();
 
   useEffect(() => {
-    const unsub = init();
+    const unsub = initialize();
     return unsub;
-  }, [init]);
+  }, [initialize]);
 
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-bingo-200 border-t-bingo-600" />
+        <Spinner size="lg" />
       </div>
     );
   }
 
+  // BigScreen is always accessible (no login required)
+  // Everything else requires authentication
   return (
-    <Routes>
-      <Route path="/" element={<Placeholder title="Velg lokasjon" />} />
-      <Route path="/spill/:locationId" element={<Placeholder title="Spillervisning" />} />
-      <Route path="/skjerm/:locationId" element={<Placeholder title="Storskjerm" />} />
-      <Route path="/admin/:locationId" element={<Placeholder title="Kontrollpanel" />} />
-      <Route path="/admin" element={<Placeholder title="Superadmin" />} />
-      <Route path="/profil" element={<Placeholder title="Min profil" />} />
-    </Routes>
+    <>
+      <Routes>
+        <Route path="/skjerm/:locationId" element={<BigScreenPage />} />
+        {firebaseUser ? (
+          <>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/spill/:locationId" element={<GamePage />} />
+            <Route path="/admin/:locationId" element={<AdminPage />} />
+            <Route path="/admin" element={<SuperAdminPage />} />
+            <Route path="/profil" element={<ProfilePage />} />
+            {import.meta.env.DEV && (
+              <Route path="/dev-admin" element={<DevAdminPage />} />
+            )}
+            <Route path="*" element={<HomePage />} />
+          </>
+        ) : (
+          <Route path="*" element={<LoginPage />} />
+
+        )}
+      </Routes>
+      <InstallPrompt />
+    </>
   );
 }

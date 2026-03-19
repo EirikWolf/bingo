@@ -4,8 +4,8 @@
 
 BingoPortalen er en PWA for digitale bingoarrangementer med flerlokasjonsstøtte og forpliktelsesbasert betaling. Ingen penger — spillere forplikter seg til dugnad/tjenester for å kjøpe kuponger.
 
-**URL:** https://bingo.web.app/  
-**Plan:** Firebase Spark (gratis) — ALDRI bruk Cloud Functions.
+**URL:** https://bingoportalen.web.app/
+**Plan:** Firebase Blaze (pay-as-you-go med budsjettvarsel)
 
 ## Les disse filene FØR du koder
 
@@ -22,12 +22,13 @@ BingoPortalen er en PWA for digitale bingoarrangementer med flerlokasjonsstøtte
 - **Frontend:** React 18 + TypeScript + Vite
 - **Styling:** Tailwind CSS 3 + Framer Motion (animasjoner)
 - **State:** Zustand
-- **Backend:** Firebase Firestore (sanntid) + Firebase Auth + Firebase Hosting
+- **Backend:** Firebase Firestore (sanntid) + Firebase Auth + Firebase Hosting + Cloud Functions v2
+- **Push:** Firebase Cloud Messaging (FCM) for push-varsler
 - **Testing:** Vitest + React Testing Library + Firebase Emulator Suite
 
 ## Ufravikelige regler
 
-1. **Ingen Cloud Functions.** All logikk på klienten. Firestore Security Rules er eneste sikkerhetslinje.
+1. **Cloud Functions kun for server-side validering og push-varsler.** Klientlogikk er primær; Cloud Functions brukes for bingo-validering, FCM-notifikasjoner, og betalingsbekreftelse. Firestore Security Rules er fortsatt sikkerhetslinje.
 2. **Firestore-regler oppdateres FØRST.** Før du skriver ny kode som skriver til Firestore, oppdater `firestore.rules` og test med emulator.
 3. **Aldri bruk `any` i TypeScript.** Alle typer i `src/types/`.
 4. **Sanntid via onSnapshot.** Aldri polling. Rydd opp lyttere i useEffect cleanup.

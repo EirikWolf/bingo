@@ -15,6 +15,8 @@ export function SettingsPanel({ location, locationId }: SettingsPanelProps) {
 
   const [vippsNumber, setVippsNumber] = useState(s.vippsNumber ?? '');
   const [vippsAmount, setVippsAmount] = useState(s.vippsDefaultAmount?.toString() ?? '');
+  const [pricingEnabled, setPricingEnabled] = useState(s.couponPricing?.enabled ?? false);
+  const [pricePerCoupon, setPricePerCoupon] = useState(s.couponPricing?.pricePerCoupon?.toString() ?? '');
   const [defaultCommitment, setDefaultCommitment] = useState(s.defaultCommitment);
   const [maxCoupons, setMaxCoupons] = useState(s.maxCouponsPerPlayer.toString());
   const [autoDrawInterval, setAutoDrawInterval] = useState((s.autoDrawIntervalMs / 1000).toString());
@@ -36,6 +38,9 @@ export function SettingsPanel({ location, locationId }: SettingsPanelProps) {
     if (amountNum !== null && (isNaN(amountNum) || amountNum < 0)) {
       errs.vippsAmount = 'Må være et positivt tall';
     }
+    if (pricingEnabled && (!pricePerCoupon || isNaN(Number(pricePerCoupon)) || Number(pricePerCoupon) <= 0)) {
+      errs.pricePerCoupon = 'Pris per kupong må være et positivt tall';
+    }
     if (!defaultCommitment.trim()) {
       errs.defaultCommitment = 'Kan ikke være tom';
     }
@@ -51,6 +56,9 @@ export function SettingsPanel({ location, locationId }: SettingsPanelProps) {
       await updateLocationSettings(locationId, {
         vippsNumber: vippsNumber.trim() || null,
         vippsDefaultAmount: vippsAmount ? Number(vippsAmount) : null,
+        couponPricing: pricingEnabled
+          ? { enabled: true, pricePerCoupon: Number(pricePerCoupon) || 0 }
+          : null,
         defaultCommitment,
         maxCouponsPerPlayer: Number(maxCoupons) || 0,
         autoDrawIntervalMs: (Number(autoDrawInterval) || 5) * 1000,
@@ -83,7 +91,7 @@ export function SettingsPanel({ location, locationId }: SettingsPanelProps) {
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-bingo-500 focus:outline-none"
             />
             <p className="text-xs text-gray-400 mt-1">
-              Brukes for "Betal via Vipps"-knappen i forpliktelseslisten
+              Brukes for Vipps-betaling i kupongkjøp og forpliktelseslisten
             </p>
           </div>
           <div>
@@ -100,6 +108,47 @@ export function SettingsPanel({ location, locationId }: SettingsPanelProps) {
             />
             {errors.vippsAmount && <p className="text-xs text-red-500 mt-1">{errors.vippsAmount}</p>}
           </div>
+        </div>
+      </Card>
+
+      {/* Coupon pricing */}
+      <Card>
+        <h3 className="text-base font-semibold text-gray-900 mb-3">Kupongprising</h3>
+        <div className="space-y-3">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={pricingEnabled}
+              onChange={(e) => setPricingEnabled(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-bingo-600 focus:ring-bingo-500"
+            />
+            <span className="text-sm text-gray-700">Tillat betaling med Vipps</span>
+          </label>
+          {pricingEnabled && (
+            <>
+              <div>
+                <label htmlFor="price-per-coupon" className="block text-sm text-gray-600 mb-1">
+                  Pris per kupong (kr)
+                </label>
+                <input
+                  id="price-per-coupon"
+                  type="number"
+                  min="1"
+                  value={pricePerCoupon}
+                  onChange={(e) => { setPricePerCoupon(e.target.value); if (errors.pricePerCoupon) setErrors((p) => { const n = { ...p }; delete n.pricePerCoupon; return n; }); }}
+                  placeholder="F.eks. 20"
+                  className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none ${errors.pricePerCoupon ? 'border-red-300' : 'border-gray-300 focus:border-bingo-500'}`}
+                />
+                {errors.pricePerCoupon && <p className="text-xs text-red-500 mt-1">{errors.pricePerCoupon}</p>}
+              </div>
+              <p className="text-xs text-gray-400">
+                Når aktivert kan spillere velge mellom forpliktelse eller Vipps-betaling ved kupongkjøp.
+                {!vippsNumber.trim() && (
+                  <span className="text-orange-500"> Du må fylle inn Vipps-nummer over for at dette skal fungere.</span>
+                )}
+              </p>
+            </>
+          )}
         </div>
       </Card>
 

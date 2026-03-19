@@ -5,6 +5,12 @@ import { useAuthStore } from '@/stores/authStore';
 import { listenToUserCommitments } from '@/services/firestore';
 import { updateUserProfile } from '@/services/actions';
 import { signOut } from '@/services/auth';
+import {
+  isNotificationSupported,
+  getNotificationPermission,
+  requestNotificationPermission,
+  removeNotificationToken,
+} from '@/services/notifications';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -37,6 +43,12 @@ export default function ProfilePage() {
   const [editPhone, setEditPhone] = useState('');
   const [phoneError, setPhoneError] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Notification state
+  const notifSupported = isNotificationSupported();
+  const [notifPermission, setNotifPermission] = useState(getNotificationPermission());
+  const [notifToken, setNotifToken] = useState<string | null>(null);
+  const [notifLoading, setNotifLoading] = useState(false);
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -93,6 +105,32 @@ export default function ProfilePage() {
       toast.error('Kunne ikke oppdatere profilen');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleToggleNotifications() {
+    if (!user) return;
+    setNotifLoading(true);
+    try {
+      if (notifToken) {
+        // Disable — remove token
+        await removeNotificationToken(user.uid, notifToken);
+        setNotifToken(null);
+        setNotifPermission('default');
+        toast.success('Push-varsler er deaktivert');
+      } else {
+        // Enable — request permission + register token
+        const token = await requestNotificationPermission(user.uid, user.activeLocationId ?? null);
+        if (token) {
+          setNotifToken(token);
+          setNotifPermission('granted');
+        }
+      }
+    } catch (error) {
+      console.error('Notification toggle error:', error);
+      toast.error('Kunne ikke endre varslingsinnstilling');
+    } finally {
+      setNotifLoading(false);
     }
   }
 
@@ -232,6 +270,33 @@ export default function ProfilePage() {
             </div>
           )}
         </Card>
+
+        {/* Notifications */}
+        {notifSupported && (
+          <Card>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-gray-900">Push-varsler</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {notifPermission === 'granted' && notifToken
+                    ? 'Du mottar varsler om nye spill og bingo'
+                    : notifPermission === 'denied'
+                      ? 'Varsler er blokkert i nettleseren. Endre i innstillingene.'
+                      : 'Få beskjed når et spill starter eller noen roper bingo'}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant={notifToken ? 'secondary' : 'primary'}
+                loading={notifLoading}
+                disabled={notifPermission === 'denied' && !notifToken}
+                onClick={handleToggleNotifications}
+              >
+                {notifToken ? 'Deaktiver' : 'Aktiver'}
+              </Button>
+            </div>
+          </Card>
+        )}
 
         {/* Commitment summary */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center text-sm">

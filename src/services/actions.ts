@@ -13,7 +13,7 @@ import { db } from './firebase';
 import { locationRef, gameRef, userRef } from './firestore';
 import { generateCouponNumbers, createEmptyMarkedGrid } from '@/utils/couponGenerator';
 import { VALID_STATUS_TRANSITIONS } from '@/utils/constants';
-import type { GameStatus, WinCondition } from '@/types';
+import type { GameStatus, WinCondition, PaymentMethod, PaymentStatus } from '@/types';
 
 // ─── User profile ─────────────────────────────────────────
 
@@ -37,7 +37,9 @@ export async function purchaseCoupon(
   userDisplayName: string,
   userPhone: string | null,
   locationName: string,
-  commitmentDescription: string
+  commitmentDescription: string,
+  paymentMethod: PaymentMethod = 'commitment',
+  paymentStatus: PaymentStatus = 'pending'
 ): Promise<string> {
   const batch = writeBatch(db);
 
@@ -58,6 +60,8 @@ export async function purchaseCoupon(
     commitmentId: commitmentRef.id,
     isWinner: false,
     winCondition: null,
+    paymentMethod,
+    paymentStatus,
     purchasedAt: serverTimestamp(),
   });
 
@@ -85,6 +89,32 @@ export async function purchaseCoupon(
 
   await batch.commit();
   return couponRef.id;
+}
+
+export async function confirmCouponPayment(
+  locationId: string,
+  gameId: string,
+  couponId: string,
+  commitmentId: string
+): Promise<void> {
+  const batch = writeBatch(db);
+
+  batch.update(
+    doc(db, 'locations', locationId, 'games', gameId, 'coupons', couponId),
+    { paymentStatus: 'paid' as PaymentStatus }
+  );
+
+  // Also confirm the linked commitment
+  batch.update(
+    doc(db, 'commitments', commitmentId),
+    {
+      status: 'confirmed',
+      confirmedAt: serverTimestamp(),
+      confirmedBy: 'vipps-auto',
+    }
+  );
+
+  await batch.commit();
 }
 
 // ─── Game management (admin) ─────────────────────────────
@@ -205,6 +235,8 @@ export async function submitBingoClaim(
       status: 'pending',
       suggestedWinCondition,
       approvedWinCondition: null,
+      serverValidated: false,
+      serverValidatedCondition: null,
       reviewedBy: null,
       reviewedAt: null,
       claimedAt: serverTimestamp(),
@@ -336,6 +368,7 @@ export async function createLocation(
       winConditions: ['row', 'column', 'diagonal'],
       vippsNumber: null,
       vippsDefaultAmount: null,
+      couponPricing: null,
       reminderEnabled: false,
       speech: {
         enabled: true,

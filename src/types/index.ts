@@ -59,6 +59,7 @@ export interface LocationSettings {
   winConditions: WinCondition[];
   vippsNumber: string | null;
   vippsDefaultAmount: number | null;
+  couponPricing: CouponPricing | null;
   reminderEnabled: boolean;
   speech: SpeechSettings;
 }
@@ -114,7 +115,18 @@ export interface Coupon {
   commitmentId: string;
   isWinner: boolean;
   winCondition: WinCondition | null;
+  paymentMethod: PaymentMethod;
+  paymentStatus: PaymentStatus;
   purchasedAt: Timestamp;
+}
+
+// ─── Payment ────────────────────────────────────────────
+export type PaymentMethod = 'commitment' | 'vipps';
+export type PaymentStatus = 'pending' | 'paid' | 'failed';
+
+export interface CouponPricing {
+  enabled: boolean;
+  pricePerCoupon: number; // NOK
 }
 
 // ─── Bingo claims ────────────────────────────────────────
@@ -126,6 +138,8 @@ export interface BingoClaim {
   status: ClaimStatus;
   suggestedWinCondition: WinCondition | null;
   approvedWinCondition: WinCondition | null;
+  serverValidated: boolean;
+  serverValidatedCondition: WinCondition | null;
   reviewedBy: string | null;
   reviewedAt: Timestamp | null;
   claimedAt: Timestamp;

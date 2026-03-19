@@ -646,11 +646,22 @@ export default function AdminPage() {
                             : 'Ukjent type'}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-col items-end gap-1">
+                        {/* Server-side validation (from Cloud Function) */}
+                        {claim.serverValidated ? (
+                          claim.serverValidatedCondition ? (
+                            <Badge variant="success">
+                              Server: {WIN_CONDITION_LABELS[claim.serverValidatedCondition]}
+                            </Badge>
+                          ) : (
+                            <Badge variant="error">Server: Ugyldig</Badge>
+                          )
+                        ) : null}
+                        {/* Client-side validation (local check) */}
                         {serverValidation ? (
-                          <Badge variant="success">Gyldig: {WIN_CONDITION_LABELS[serverValidation]}</Badge>
+                          <Badge variant="success">Klient: {WIN_CONDITION_LABELS[serverValidation]}</Badge>
                         ) : (
-                          <Badge variant="error">Ugyldig</Badge>
+                          <Badge variant="error">Klient: Ugyldig</Badge>
                         )}
                       </div>
                     </div>

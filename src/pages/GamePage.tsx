@@ -30,7 +30,7 @@ export default function GamePage() {
   const [commitmentAccepted, setCommitmentAccepted] = useState(false);
   const [purchasing, setPurchasing] = useState(false);
   const [claimingBingo, setClaimingBingo] = useState(false);
-  const [paymentChoice, setPaymentChoice] = useState<'commitment' | 'vipps'>('commitment');
+  const [showVippsInfo, setShowVippsInfo] = useState(false);
 
   // Reset store on unmount
   useEffect(() => {
@@ -123,11 +123,10 @@ export default function GamePage() {
     }
   }, [activeCoupon?.isWinner]);
 
-  // Payment config
-  const pricing = location?.settings?.couponPricing;
-  const vippsAvailable = !!(pricing?.enabled && location?.settings?.vippsNumber);
+  // Payment config — determined by how the game was created
+  const isVippsGame = game?.commitment?.startsWith('Vipps-betaling:') ?? false;
   const vippsNumber = location?.settings?.vippsNumber ?? '';
-  const pricePerCoupon = pricing?.pricePerCoupon ?? 0;
+  const pricePerCoupon = location?.settings?.couponPricing?.pricePerCoupon ?? 0;
 
   // Purchase handler
   async function handlePurchase() {
@@ -138,7 +137,7 @@ export default function GamePage() {
     }
     setPurchasing(true);
     try {
-      const isVipps = paymentChoice === 'vipps' && vippsAvailable;
+      const isVipps = isVippsGame;
       await purchaseCoupon(
         locationId,
         game.id,
@@ -151,17 +150,14 @@ export default function GamePage() {
         'pending'
       );
 
-      // If Vipps: open Vipps deep-link on mobile
-      if (isVipps && vippsNumber) {
-        const vippsUrl = `vipps://send?number=${vippsNumber}&amount=${pricePerCoupon}&message=${encodeURIComponent(`Bingo kupong - ${location.name}`)}`;
-        window.open(vippsUrl, '_blank');
-        toast.success('Kupong kjøpt! Fullfør betaling i Vipps.');
+      if (isVipps) {
+        toast.success('Kupong opprettet! Betal via Vipps for å aktivere den.');
+        setShowVippsInfo(true);
       } else {
         toast.success('Kupong kjøpt!');
       }
       setShowPurchaseModal(false);
       setCommitmentAccepted(false);
-      setPaymentChoice('commitment');
     } catch (error: unknown) {
       const errMsg = error instanceof Error ? error.message : String(error);
       console.error('Purchase error:', errMsg, error);
@@ -260,7 +256,11 @@ export default function GamePage() {
         {game && canBuy && coupons.length === 0 && (
           <Card className="text-center">
             <p className="font-medium text-gray-900">Spillet er åpent for kupongkjøp!</p>
-            <p className="text-sm text-gray-500 mt-1">Forpliktelse: {game.commitment}</p>
+            <p className="text-sm text-gray-500 mt-1">
+              {isVippsGame
+                ? `Pris: ${pricePerCoupon} kr (Vipps)`
+                : `Forpliktelse: ${game.commitment}`}
+            </p>
             <Button className="mt-4" onClick={() => setShowPurchaseModal(true)}>
               Kjøp kupong
             </Button>
@@ -378,48 +378,14 @@ export default function GamePage() {
             </div>
           )}
 
-          {/* Payment method selection */}
-          {vippsAvailable ? (
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-gray-700">Velg betalingsmåte:</p>
-
-              {/* Commitment option */}
-              <label className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
-                paymentChoice === 'commitment' ? 'border-bingo-500 bg-bingo-50' : 'border-gray-200 hover:border-gray-300'
-              }`}>
-                <input
-                  type="radio"
-                  name="payment"
-                  checked={paymentChoice === 'commitment'}
-                  onChange={() => setPaymentChoice('commitment')}
-                  className="mt-0.5 h-4 w-4 text-bingo-600 focus:ring-bingo-500"
-                />
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Forpliktelse (dugnad)</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{game?.commitment}</p>
-                </div>
-              </label>
-
-              {/* Vipps option */}
-              <label className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
-                paymentChoice === 'vipps' ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-gray-300'
-              }`}>
-                <input
-                  type="radio"
-                  name="payment"
-                  checked={paymentChoice === 'vipps'}
-                  onChange={() => setPaymentChoice('vipps')}
-                  className="mt-0.5 h-4 w-4 text-orange-600 focus:ring-orange-500"
-                />
-                <div>
-                  <p className="text-sm font-medium text-gray-900">
-                    Betal med Vipps — {pricePerCoupon} kr
-                  </p>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    Du blir sendt til Vipps-appen for å fullføre betalingen
-                  </p>
-                </div>
-              </label>
+          {/* Payment info — determined by how admin created the game */}
+          {isVippsGame ? (
+            <div className="rounded-lg bg-orange-50 border border-orange-200 p-3">
+              <p className="text-sm font-medium text-orange-800">Betaling via Vipps</p>
+              <p className="text-sm text-orange-600 mt-1">{pricePerCoupon} kr per kupong</p>
+              <p className="text-xs text-orange-500 mt-1">
+                Du blir sendt til Vipps-appen for å fullføre betalingen
+              </p>
             </div>
           ) : (
             <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
@@ -428,9 +394,8 @@ export default function GamePage() {
             </div>
           )}
 
-          {/* Acceptance text */}
           <p className="text-sm text-gray-500">
-            {paymentChoice === 'vipps' && vippsAvailable
+            {isVippsGame
               ? `Ved å kjøpe en kupong betaler du ${pricePerCoupon} kr via Vipps.`
               : 'Ved å kjøpe en kupong forplikter du deg til ovenstående. Ingen penger er involvert.'}
           </p>
@@ -443,7 +408,7 @@ export default function GamePage() {
               className="mt-1 h-4 w-4 rounded border-gray-300 text-bingo-600 focus:ring-bingo-500"
             />
             <span className="text-sm text-gray-700">
-              {paymentChoice === 'vipps' && vippsAvailable
+              {isVippsGame
                 ? `Jeg ønsker å kjøpe 1 kupong for ${pricePerCoupon} kr`
                 : 'Jeg godtar forpliktelsen og ønsker å kjøpe 1 kupong'}
             </span>
@@ -463,9 +428,52 @@ export default function GamePage() {
               disabled={!commitmentAccepted || missingPhone}
               onClick={handlePurchase}
             >
-              {paymentChoice === 'vipps' && vippsAvailable ? 'Betal med Vipps' : 'Bekreft kjøp'}
+              {isVippsGame ? 'Betal med Vipps' : 'Bekreft kjøp'}
             </Button>
           </div>
+        </div>
+      </Modal>
+
+      {/* Vipps payment instructions modal */}
+      <Modal
+        open={showVippsInfo}
+        onClose={() => setShowVippsInfo(false)}
+        title="Betal med Vipps"
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg bg-orange-50 border border-orange-200 p-4 text-center">
+            <p className="text-sm text-orange-700 mb-2">Send betaling til</p>
+            <p className="text-3xl font-bold text-orange-900">{vippsNumber}</p>
+            <p className="text-lg font-semibold text-orange-800 mt-2">{pricePerCoupon} kr</p>
+          </div>
+
+          <div className="space-y-2 text-sm text-gray-600">
+            <p className="font-medium text-gray-800">Slik gjør du:</p>
+            <ol className="list-decimal list-inside space-y-1">
+              <li>Åpne Vipps-appen</li>
+              <li>Søk opp nummeret <strong>{vippsNumber}</strong></li>
+              <li>Send <strong>{pricePerCoupon} kr</strong></li>
+              <li>Skriv ditt navn i meldingsfeltet</li>
+            </ol>
+          </div>
+
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(vippsNumber);
+              toast.success('Vipps-nummer kopiert!');
+            }}
+            className="w-full rounded-lg border border-orange-300 bg-orange-50 py-2.5 text-sm font-medium text-orange-700 hover:bg-orange-100 transition-colors"
+          >
+            Kopier Vipps-nummer
+          </button>
+
+          <p className="text-xs text-gray-400 text-center">
+            Kupongen aktiveres når admin bekrefter betalingen.
+          </p>
+
+          <Button className="w-full" onClick={() => setShowVippsInfo(false)}>
+            Jeg har betalt
+          </Button>
         </div>
       </Modal>
     </div>

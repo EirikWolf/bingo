@@ -68,10 +68,21 @@ export async function requestNotificationPermission(
   if (!msg) return null;
 
   try {
-    // Register the FCM service worker
+    // Register the FCM service worker and wait until it's active
     const registration = await navigator.serviceWorker.register(
       '/firebase-messaging-sw.js'
     );
+    // Wait for the service worker to be ready
+    if (registration.installing) {
+      await new Promise<void>((resolve) => {
+        registration.installing!.addEventListener('statechange', function handler() {
+          if (this.state === 'activated') {
+            this.removeEventListener('statechange', handler);
+            resolve();
+          }
+        });
+      });
+    }
 
     const token = await getToken(msg, {
       vapidKey: VAPID_KEY,

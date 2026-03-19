@@ -3,6 +3,7 @@
 > Revisjon 1: 2026-03-19. Alle 40+ punkter fikset.
 > Revisjon 2: 2026-03-19. Ny gjennomgang etter bugfikser, profilredigering, telefonnummerkrav, norske tegn og bakgrunnsmusikk.
 > Fase 9: 2026-03-19. 13 av 19 forbedringer implementert.
+> Fase 10: 2026-03-19. Cloud Functions, FCM, Vipps-betaling, auto-trekking, auto-godkjenning, daglig opprydding.
 > Kategorier: BUG, SIKKERHET, LOGIKK, UX, UI, YTELSE, MANGLER
 
 ---
@@ -94,16 +95,67 @@
 
 ---
 
-## Gjenstående (fremtidig arbeid)
+## Fase 10: Cloud Functions & serverlogikk — ✅ IMPLEMENTERT
+
+### 10.1 Grunnlag
+- ✅ **CF-001: Cloud Functions v2 infrastruktur.** `functions/` katalog med TypeScript, firebase-admin, firebase-functions v5.
+- ✅ **CF-002: Server-side bingo-validering.** `onBingoClaimCreated` — validerer kupongen mot trukne tall, setter `serverValidated` og `serverValidatedCondition`.
+- ✅ **CF-003: FCM push-varsler.** `onGameStatusChanged` (spillstart/åpent/vinner), `onBingoClaimNotify` (admin-varsel ved bingo-rop). Service worker + klient-side token-håndtering.
+- ✅ **CF-004: Vipps-betaling.** Kupongprising per lokasjon, admin velger forpliktelse ELLER Vipps per spill, Vipps-betalingsinstruksjoner med kopier-nummer. `onPaymentConfirmed` auto-bekrefter forpliktelse.
+
+### 10.2 Automatisering
+- ✅ **CF-005: Automatisk vinnerverifisering.** `onClaimServerValidated` — godkjenner gyldige bingo-rop automatisk uten admin-inngrep. Oppdaterer claim, kupong og game.winners i batch.
+- ✅ **CF-006: Serverbasert auto-trekking.** `autoDrawScheduler` — kjører hvert minutt, trekker tall for aktive spill med `autoDrawActive=true` basert på `autoDrawIntervalMs`.
+- ✅ **CF-007: Daglig opprydding.** `dailyCleanup` — kjører 03:00 CET. Markerer forpliktelser >30 dager som forfalt, sletter stale FCM-tokens, avslutter forlatte spill >7 dager.
+
+---
+
+## Fase 11: Fremtidige Cloud Function-forbedringer (planlagt)
+
+### 11.1 HØYT — Sikkerhet & integritet
+| ID | Beskrivelse | Status |
+|----|-------------|--------|
+| CF-008 | **Juks-deteksjon.** Cloud Function som overvåker mistenkelige mønstre: kuponger med like tall, unormalt mange bingo-rop fra samme bruker | ⬜ |
+| CF-009 | **Rate limiting på kupongkjøp.** Firestore trigger som avviser kjøp om brukeren har kjøpt >X kuponger siste Y minutter | ⬜ |
+
+### 11.2 HØYT — Betaling
+| ID | Beskrivelse | Status |
+|----|-------------|--------|
+| CF-010 | **Vipps Checkout API-integrasjon.** Ekte Vipps-betaling med webhook for automatisk bekreftelse (krever Vipps-merchantavtale) | ⬜ |
+| CF-011 | **Betalingspåminnelser.** Scheduled function som sender push-varsel til spillere med ubetalte Vipps-kuponger | ⬜ |
+
+### 11.3 MIDDELS — Statistikk & kommunikasjon
+| ID | Beskrivelse | Status |
+|----|-------------|--------|
+| CF-012 | **Aggregert statistikk.** Firestore trigger som oppdaterer location-level stats (totalt spill, kuponger, gjennomsnitt spillere) | ⬜ |
+| CF-013 | **Spillerranking/leaderboard.** Automatisk oppdatert liste over spillere med flest vinnere per lokasjon | ⬜ |
+| CF-014 | **E-postvarsler.** Bekreftelse ved kupongkjøp, påminnelse om forpliktelser (via SendGrid/Mailgun) | ⬜ |
+| CF-015 | **SMS-varsler.** For spillere uten push-støtte (via Twilio) | ⬜ |
+
+### 11.4 MIDDELS — Spillforbedringer
+| ID | Beskrivelse | Status |
+|----|-------------|--------|
+| CF-016 | **Turneringsmodus.** Cloud Function som håndterer flere runder med poengberegning | ⬜ |
+| CF-017 | **Smartere push-varsler.** "Spillet starter om 10 min", "Du har 1 umarkert tall igjen!" | ⬜ |
+
+### 11.5 LAVT — Teknisk
+| ID | Beskrivelse | Status |
+|----|-------------|--------|
+| CF-018 | **Firestore backup.** Scheduled export av database til Cloud Storage | ⬜ |
+| CF-019 | **Bildeprosessering.** Automatisk resize/komprimering av profilbilder ved opplasting | ⬜ |
+
+---
+
+## Gjenstående fra Fase 9 (fremtidig arbeid)
 
 | ID | Beskrivelse | Prioritet |
 |----|-------------|-----------|
-| NY-006 | Push-varsler via FCM | Høy |
-| NY-010 | Rate limiting i Firestore-regler | Middels |
+| ~~NY-006~~ | ~~Push-varsler via FCM~~ | ✅ Fase 10 |
+| NY-010 | Rate limiting → se CF-009 | Middels |
 | NY-012 | Mørk modus | Middels |
 | NY-013 | Flerspråklig støtte (i18n) | Middels |
 | NY-014 | Onboarding-wizard for nye lokasjoner | Middels |
-| NY-016 | Vipps deep-link verifisering | Lav |
+| ~~NY-016~~ | ~~Vipps deep-link~~ → erstattet med betalingsinstruksjoner | ✅ Fase 10 |
 | NY-019 | E2E-tester med Playwright | Lav |
 
 ---

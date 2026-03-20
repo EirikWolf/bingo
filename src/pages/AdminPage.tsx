@@ -382,9 +382,9 @@ export default function AdminPage() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-8">
       {/* Header */}
-      <header className="bg-white border-b border-gray-100 px-4 py-3">
+      <header className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 px-4 py-3">
         <div className="flex items-center justify-between">
           <button onClick={() => navigate('/')} className="text-bingo-600 text-sm">
             ← Tilbake
@@ -402,7 +402,7 @@ export default function AdminPage() {
       </header>
 
       {/* Tab navigation */}
-      <div className="bg-white border-b border-gray-100">
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
         <div className="mx-auto max-w-2xl flex">
           {([['spill', 'Spill'], ['forpliktelser', 'Forpliktelser'], ['spillere', 'Spillere'], ['statistikk', 'Statistikk'], ['innstillinger', 'Innstillinger']] as [AdminTab, string][]).map(([tab, label]) => (
             <button

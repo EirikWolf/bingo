@@ -185,5 +185,27 @@ export interface LeaderboardEntry {
   updatedAt: Timestamp;
 }
 
+// ─── Tournaments ────────────────────────────────────────
+export type TournamentStatus = 'active' | 'finished';
+
+export interface TournamentStanding {
+  userId: string;
+  displayName: string;
+  totalPoints: number;
+  roundsPlayed: number;
+}
+
+export interface Tournament {
+  id: string;
+  name: string;
+  status: TournamentStatus;
+  totalRounds: number;
+  completedRounds: number;
+  currentGameId: string | null;
+  standings: TournamentStanding[];
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
 // Re-export grid constants from the canonical source
 export { GRID_SIZE } from '@/utils/constants';

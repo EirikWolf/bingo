@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/stores/authStore';
+import { useThemeStore } from '@/stores/themeStore';
 import { listenToUserCommitments } from '@/services/firestore';
 import { updateUserProfile } from '@/services/actions';
 import { signOut } from '@/services/auth';
@@ -30,6 +31,41 @@ const STATUS_VARIANT: Record<CommitmentStatus, 'warning' | 'success' | 'error' |
   overdue: 'error',
   cancelled: 'default',
 };
+
+function ThemeToggle() {
+  const { theme, setTheme } = useThemeStore();
+  const options: Array<{ value: 'light' | 'dark' | 'system'; label: string }> = [
+    { value: 'light', label: 'Lys' },
+    { value: 'dark', label: 'Mørk' },
+    { value: 'system', label: 'System' },
+  ];
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="font-medium text-gray-900 dark:text-gray-100">Utseende</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Velg lys, mørk eller følg systemet</p>
+        </div>
+        <div className="flex rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden">
+          {options.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setTheme(opt.value)}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                theme === opt.value
+                  ? 'bg-bingo-600 text-white'
+                  : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </Card>
+  );
+}
 
 export default function ProfilePage() {
   const navigate = useNavigate();
@@ -153,14 +189,14 @@ export default function ProfilePage() {
   const overdueCount = commitments.filter((c) => c.status === 'overdue').length;
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-8">
       {/* Header */}
-      <header className="bg-white border-b border-gray-100 px-4 py-3">
+      <header className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 px-4 py-3">
         <div className="flex items-center justify-between">
           <button onClick={() => navigate('/')} className="text-bingo-600 text-sm">
             ← Tilbake
           </button>
-          <h1 className="font-semibold text-gray-900">Min profil</h1>
+          <h1 className="font-semibold text-gray-900 dark:text-gray-100">Min profil</h1>
           <div className="w-16" />
         </div>
       </header>
@@ -183,7 +219,7 @@ export default function ProfilePage() {
                   </div>
                 )}
                 <div className="flex-1">
-                  <p className="font-semibold text-gray-900">{user.displayName}</p>
+                  <p className="font-semibold text-gray-900 dark:text-gray-100">{user.displayName}</p>
                   {user.email && <p className="text-sm text-gray-500">{user.email}</p>}
                   {user.phone ? (
                     <p className="text-sm text-gray-500">{user.phone}</p>
@@ -276,7 +312,7 @@ export default function ProfilePage() {
           <Card>
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium text-gray-900">Push-varsler</p>
+                <p className="font-medium text-gray-900 dark:text-gray-100">Push-varsler</p>
                 <p className="text-xs text-gray-500 mt-0.5">
                   {notifPermission === 'granted' && notifToken
                     ? 'Du mottar varsler om nye spill og bingo'
@@ -297,6 +333,9 @@ export default function ProfilePage() {
             </div>
           </Card>
         )}
+
+        {/* Theme toggle */}
+        <ThemeToggle />
 
         {/* Commitment summary */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center text-sm">

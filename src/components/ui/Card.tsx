@@ -14,7 +14,7 @@ const paddingClasses = {
 export function Card({ padding = 'md', className = '', children, ...props }: CardProps) {
   return (
     <div
-      className={`rounded-2xl bg-white shadow-sm border border-gray-100 ${paddingClasses[padding]} ${className}`}
+      className={`rounded-2xl bg-white shadow-sm border border-gray-100 dark:bg-gray-800 dark:border-gray-700 ${paddingClasses[padding]} ${className}`}
       {...props}
     >
       {children}

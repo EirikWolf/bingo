@@ -1,6 +1,7 @@
 import { useEffect, Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
+import '@/stores/themeStore'; // Initialize theme on app start (applies dark class to <html>)
 import { Spinner } from '@/components/ui/Spinner';
 import { InstallPrompt } from '@/components/ui/InstallPrompt';
 

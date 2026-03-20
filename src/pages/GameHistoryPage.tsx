@@ -39,8 +39,8 @@ export default function GameHistoryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-8">
-      <header className="bg-white border-b border-gray-100 px-4 py-3">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-8">
+      <header className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 px-4 py-3">
         <div className="flex items-center justify-between">
           <button onClick={() => navigate(-1)} className="text-bingo-600 text-sm">
             ← Tilbake

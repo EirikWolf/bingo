@@ -103,7 +103,7 @@ export function Modal({ open, onClose, title, size = 'lg', children }: ModalProp
         >
           <motion.div
             ref={dialogRef}
-            className={`w-full ${sizeClasses[size]} rounded-2xl bg-white p-6 shadow-xl focus:outline-none`}
+            className={`w-full ${sizeClasses[size]} rounded-2xl bg-white dark:bg-gray-800 p-6 shadow-xl focus:outline-none`}
             initial={{ y: 50, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 50, opacity: 0 }}
@@ -114,10 +114,10 @@ export function Modal({ open, onClose, title, size = 'lg', children }: ModalProp
           >
             {title && (
               <div className="mb-4 flex items-center justify-between">
-                <h2 id="modal-title" className="text-lg font-semibold text-gray-900">{title}</h2>
+                <h2 id="modal-title" className="text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
                 <button
                   onClick={onClose}
-                  className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-bingo-500"
+                  className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-bingo-500"
                   aria-label="Lukk"
                 >
                   <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">

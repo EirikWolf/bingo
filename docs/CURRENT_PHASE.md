@@ -1,41 +1,20 @@
-# Alle faser fullfort
+# Fase 12: Sikkerhet, turneringsmodus, mørk modus og polish
 
-> Prosjektet er komplett.
+> Startet: 2026-03-20
 
-## Fullforte faser
+## Oppgaver
 
-- Fase 0: Prosjektskjelett ✅
-- Fase 1: Auth + lokasjoner ✅
-- Fase 2: Kupongkjop + spillflyt ✅
-- Fase 3: Storskjerm + trekning + lyd ✅
-- Fase 4: Bingo-rop + vinner ✅
-- Fase 5: Kasserer + forpliktelser ✅
-- Fase 6: Vipps + SMS + varsler ✅ (uten FCM push — krever Cloud Functions)
-- Fase 7: Dev-admin + testdata ✅
-- Fase 8: PWA + offline + polish ✅
+- [x] **CF-008: Juks-deteksjon.** Cloud Function som overvåker kuponger for duplikattall, feil kolonneplassering, ugyldige tall. Separat sjekk for bingo-rop-mønstre (>3 fra samme bruker). Admin-varsling via push.
+- [x] **CF-009: Rate limiting på kupongkjøp.** Firestore trigger som flagger kuponger om brukeren har kjøpt >10 siste 5 minutter. Admin-varsling.
+- [x] **CF-016: Turneringsmodus.** Cloud Function som håndterer flere runder med poengberegning (3-2-1 poeng). Automatisk oppdatering av standings. Push-varsel ved turneringsvinner.
+- [x] **NY-012: Mørk modus.** Tailwind `darkMode: 'class'`, Zustand theme store med persist, toggle i profil (lys/mørk/system), global CSS-overrides for inputs/labels/tekst/bakgrunner. Alle UI-komponenter (Card, Button, Modal, Badge) har dark:-klasser.
+- [x] **NY-014: Onboarding-wizard.** 5-trinns veiviser (velkomst → navn → forpliktelse → innstillinger → ferdig) på forsiden. Oppretter lokasjon og konfigurerer grunninnstillinger.
+- [x] **CF-018: Firestore backup.** Scheduled Cloud Function som eksporterer database til Cloud Storage daglig kl 02:00 CET via Firestore Admin REST API.
+- [x] **Firebase-chunk splitting.** Delt Firebase-chunk fra 577KB til 4 separate: core, auth (176KB), firestore (401KB), messaging (43KB). Vendor-chunk for zustand/framer-motion/etc.
 
-## Fase 8 — Hva ble gjort
+## Fullførte faser
 
-- [x] Service Worker + offline cache (vite-plugin-pwa med Workbox, 16 precached entries)
-- [x] PWA-manifest + installeringsprompt (InstallPrompt-komponent med beforeinstallprompt)
-- [x] Firestore offline persistence (enableIndexedDbPersistence)
-- [x] WCAG 2.1 AA gjennomgang og fiks:
-  - Modal: fokus-trap, fokus-retur, aria-labelledby, lukkeknapp fokusring
-  - LoginPage: sr-only labels pa alle inputs, focus:ring-2
-  - HomePage: LocationCard fokusring + aria-label, profilknapp fallback
-  - CouponGrid: aria-labels pa alle celler, aria-hidden pa dekorative elementer
-  - Badge: warning-variant kontrastfiks (yellow-700 → yellow-800)
-  - Ball-farger: ball-i og ball-n morknet for hvit-tekst-kontrast
-- [x] PWA-ikoner generert (64, 180, 192, 512px)
-
-## Neste steg
-
-- `npm run deploy` for a deploye til Firebase Hosting
-- Kjor Lighthouse i Chrome DevTools pa produksjonsbygget for endelig scoring
-
-## Notater
-
-- FCM push-varsler droppet — krever Cloud Functions som ikke er tilgjengelig pa Spark-planen.
-- Vipps bruker deep link: `vipps://send?number=X&amount=Y`
-- SMS bruker deep link: `sms:{phone}?body={encoded}`
-- Admin-innstillinger-fane lagt til for Vipps-nummer, standardbelop, spillinnstillinger.
+- Fase 0–8: Prosjektskjelett → PWA + offline + polish
+- Fase 9: Videreutvikling (13/19)
+- Fase 10: Cloud Functions & serverlogikk
+- Fase 12: Sikkerhet, turneringsmodus, mørk modus og polish

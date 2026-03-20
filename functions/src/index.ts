@@ -539,6 +539,354 @@ export const onClaimServerValidated = onDocumentUpdated(
   }
 );
 
+// ─── CF-008: Cheat detection ─────────────────────────────
+// When a coupon is created, check for suspicious patterns:
+// 1. Duplicate numbers on the coupon
+// 2. User has too many bingo claims in a short time window
+
+export const onCouponCheatCheck = onDocumentCreated(
+  'locations/{locationId}/games/{gameId}/coupons/{couponId}',
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+
+    const coupon = snap.data();
+    const { locationId, gameId, couponId } = event.params;
+    const flags: string[] = [];
+
+    // Check 1: Duplicate numbers on the coupon (should be impossible but verify)
+    const numbers: number[] = coupon.numbers ?? [];
+    const freeCenter = numbers.length === 25; // center cell is 0 (free space)
+    const nonFreeNumbers = freeCenter
+      ? numbers.filter((_: number, i: number) => i !== 12)
+      : numbers;
+    const uniqueNumbers = new Set(nonFreeNumbers.filter((n: number) => n !== 0));
+    if (uniqueNumbers.size < nonFreeNumbers.filter((n: number) => n !== 0).length) {
+      flags.push('duplicate_numbers');
+    }
+
+    // Check 2: Numbers outside valid bingo range (1-75)
+    for (const num of nonFreeNumbers) {
+      if (num !== 0 && (num < 1 || num > 75)) {
+        flags.push('invalid_number_range');
+        break;
+      }
+    }
+
+    // Check 3: Numbers not in correct column ranges (B:1-15, I:16-30, N:31-45, G:46-60, O:61-75)
+    const columnRanges = [
+      [1, 15], [16, 30], [31, 45], [46, 60], [61, 75],
+    ];
+    for (let row = 0; row < 5; row++) {
+      for (let col = 0; col < 5; col++) {
+        const idx = row * 5 + col;
+        const num = numbers[idx];
+        if (num === 0) continue; // free space
+        const [min, max] = columnRanges[col]!;
+        if (num < min! || num > max!) {
+          flags.push('wrong_column_placement');
+          break;
+        }
+      }
+      if (flags.includes('wrong_column_placement')) break;
+    }
+
+    if (flags.length > 0) {
+      // Flag the coupon
+      await snap.ref.update({
+        cheatFlags: flags,
+        flaggedAt: FieldValue.serverTimestamp(),
+      });
+
+      // Notify admins
+      const locationSnap = await db.doc(`locations/${locationId}`).get();
+      const adminUids: string[] = locationSnap.data()?.adminUids ?? [];
+      const locationName = locationSnap.data()?.name ?? 'Bingo';
+
+      const tokens: string[] = [];
+      for (const uid of adminUids) {
+        const tokenSnap = await db.collection(`users/${uid}/fcmTokens`).get();
+        tokenSnap.docs.forEach((d) => tokens.push(d.data().token));
+      }
+
+      await sendToTokens(
+        tokens,
+        'Mistenkelig kupong oppdaget!',
+        `Kupong fra ${coupon.userDisplayName} hos ${locationName} har flagg: ${flags.join(', ')}`,
+        `/admin/${locationId}`
+      );
+
+      logger.warn('Cheat flags detected on coupon', {
+        locationId, gameId, couponId,
+        userId: coupon.userId,
+        flags,
+      });
+    }
+  }
+);
+
+/**
+ * CF-008b: Monitor bingo claims for suspicious patterns.
+ * Checks if a user has submitted too many claims in a short time.
+ */
+export const onClaimCheatCheck = onDocumentCreated(
+  'locations/{locationId}/games/{gameId}/bingo_claims/{claimId}',
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+
+    const claim = snap.data();
+    const { locationId, gameId } = event.params;
+    const flags: string[] = [];
+
+    // Check: Too many claims from same user in this game (>3 is suspicious)
+    const userClaimsSnap = await db
+      .collection(`locations/${locationId}/games/${gameId}/bingo_claims`)
+      .where('userId', '==', claim.userId)
+      .get();
+
+    if (userClaimsSnap.size > 3) {
+      flags.push(`excessive_claims:${userClaimsSnap.size}`);
+    }
+
+    if (flags.length > 0) {
+      await snap.ref.update({
+        cheatFlags: flags,
+        flaggedAt: FieldValue.serverTimestamp(),
+      });
+
+      logger.warn('Suspicious bingo claim pattern', {
+        locationId, gameId,
+        userId: claim.userId,
+        claimCount: userClaimsSnap.size,
+        flags,
+      });
+    }
+  }
+);
+
+// ─── CF-009: Rate limiting on coupon purchases ───────────
+// When a coupon is created, check if the user has bought too many
+// coupons in the last 5 minutes (across all games at this location).
+
+export const onCouponRateLimit = onDocumentCreated(
+  'locations/{locationId}/games/{gameId}/coupons/{couponId}',
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+
+    const coupon = snap.data();
+    const { locationId, gameId } = event.params;
+
+    const fiveMinutesAgo = Timestamp.fromMillis(Date.now() - 5 * 60 * 1000);
+
+    // Count coupons this user bought in the last 5 minutes for this game
+    const recentCouponsSnap = await db
+      .collection(`locations/${locationId}/games/${gameId}/coupons`)
+      .where('userId', '==', coupon.userId)
+      .where('purchasedAt', '>', fiveMinutesAgo)
+      .get();
+
+    const MAX_COUPONS_PER_5_MIN = 10;
+
+    if (recentCouponsSnap.size > MAX_COUPONS_PER_5_MIN) {
+      // Flag the coupon and notify admins
+      await snap.ref.update({
+        rateLimited: true,
+        rateLimitFlags: [`${recentCouponsSnap.size}_in_5min`],
+        flaggedAt: FieldValue.serverTimestamp(),
+      });
+
+      const locationSnap = await db.doc(`locations/${locationId}`).get();
+      const adminUids: string[] = locationSnap.data()?.adminUids ?? [];
+      const locationName = locationSnap.data()?.name ?? 'Bingo';
+
+      const tokens: string[] = [];
+      for (const uid of adminUids) {
+        const tokenSnap = await db.collection(`users/${uid}/fcmTokens`).get();
+        tokenSnap.docs.forEach((d) => tokens.push(d.data().token));
+      }
+
+      await sendToTokens(
+        tokens,
+        'Rate limit overskrevet!',
+        `${coupon.userDisplayName} har kjøpt ${recentCouponsSnap.size} kuponger på 5 min hos ${locationName}`,
+        `/admin/${locationId}`
+      );
+
+      logger.warn('Rate limit exceeded for coupon purchase', {
+        locationId, gameId,
+        userId: coupon.userId,
+        recentCount: recentCouponsSnap.size,
+      });
+    }
+  }
+);
+
+// ─── CF-016: Tournament mode ─────────────────────────────
+// When a game finishes and the location has tournament mode enabled,
+// track round scores and manage multi-round tournaments.
+
+export const onTournamentRoundFinished = onDocumentUpdated(
+  'locations/{locationId}/games/{gameId}',
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!before || !after) return;
+
+    // Only trigger when game finishes
+    if (before.status === after.status || after.status !== 'finished') return;
+    // Only for tournament games
+    if (!after.tournamentId) return;
+
+    const { locationId, gameId } = event.params;
+    const tournamentId = after.tournamentId as string;
+
+    try {
+      const tournamentRef = db.doc(`locations/${locationId}/tournaments/${tournamentId}`);
+      const tournamentSnap = await tournamentRef.get();
+      if (!tournamentSnap.exists) return;
+
+      const tournament = tournamentSnap.data()!;
+      const roundNumber = (tournament.completedRounds ?? 0) + 1;
+      const totalRounds = tournament.totalRounds ?? 3;
+
+      // Calculate points for this round
+      const winners = (after.winners ?? []) as Array<{
+        userId: string;
+        displayName: string;
+        winCondition: string;
+      }>;
+
+      // Points: 1st bingo = 3pts, 2nd = 2pts, 3rd = 1pt
+      const roundScores: Record<string, { displayName: string; points: number }> = {};
+      winners.forEach((w, idx) => {
+        const points = Math.max(3 - idx, 1);
+        if (roundScores[w.userId]) {
+          roundScores[w.userId]!.points += points;
+        } else {
+          roundScores[w.userId] = { displayName: w.displayName, points };
+        }
+      });
+
+      // Save round result
+      const roundRef = db.doc(
+        `locations/${locationId}/tournaments/${tournamentId}/rounds/${gameId}`
+      );
+      await roundRef.set({
+        roundNumber,
+        gameId,
+        scores: roundScores,
+        completedAt: FieldValue.serverTimestamp(),
+      });
+
+      // Update tournament standings
+      const allRoundsSnap = await db
+        .collection(`locations/${locationId}/tournaments/${tournamentId}/rounds`)
+        .get();
+
+      const totalScores: Record<string, { displayName: string; totalPoints: number; roundsPlayed: number }> = {};
+      for (const roundDoc of allRoundsSnap.docs) {
+        const roundData = roundDoc.data();
+        const scores = roundData.scores as Record<string, { displayName: string; points: number }>;
+        for (const [userId, data] of Object.entries(scores)) {
+          if (totalScores[userId]) {
+            totalScores[userId]!.totalPoints += data.points;
+            totalScores[userId]!.roundsPlayed += 1;
+          } else {
+            totalScores[userId] = {
+              displayName: data.displayName,
+              totalPoints: data.points,
+              roundsPlayed: 1,
+            };
+          }
+        }
+      }
+
+      // Sort standings by points
+      const standings = Object.entries(totalScores)
+        .map(([userId, data]) => ({ userId, ...data }))
+        .sort((a, b) => b.totalPoints - a.totalPoints);
+
+      const isComplete = roundNumber >= totalRounds;
+
+      await tournamentRef.update({
+        completedRounds: roundNumber,
+        standings,
+        status: isComplete ? 'finished' : 'active',
+        currentGameId: isComplete ? null : tournament.currentGameId,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      if (isComplete && standings.length > 0) {
+        // Notify about tournament winner
+        const locationSnap = await db.doc(`locations/${locationId}`).get();
+        const locationName = locationSnap.data()?.name ?? 'Bingo';
+
+        const tokens = await getTokensForLocation(locationId);
+        await sendToTokens(
+          tokens,
+          'Turnering avsluttet!',
+          `${standings[0]!.displayName} vant turneringen hos ${locationName} med ${standings[0]!.totalPoints} poeng!`,
+          `/spill/${locationId}`
+        );
+      }
+
+      logger.info('Tournament round completed', {
+        locationId, tournamentId, roundNumber,
+        isComplete,
+        standingsCount: standings.length,
+      });
+    } catch (error) {
+      logger.error('Failed to process tournament round', { locationId, gameId, error });
+    }
+  }
+);
+
+// ─── CF-018: Firestore backup ────────────────────────────
+// Runs daily at 02:00 CET. Exports Firestore to Cloud Storage
+// using the Firestore Admin REST API via google-auth-library.
+
+export const dailyFirestoreBackup = onSchedule(
+  { schedule: 'every day 02:00', timeZone: 'Europe/Oslo', timeoutSeconds: 300 },
+  async () => {
+    try {
+      const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || 'bingo-42fe1';
+      const bucketName = `${projectId}-firestore-backups`;
+      const date = new Date().toISOString().split('T')[0];
+      const outputUri = `gs://${bucketName}/${date}`;
+
+      // Use google-auth-library to get an access token
+      const { GoogleAuth } = await import('google-auth-library');
+      const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/datastore'] });
+      const client = await auth.getClient();
+      const token = await client.getAccessToken();
+
+      const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default):exportDocuments`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          outputUriPrefix: outputUri,
+          collectionIds: [], // all collections
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Backup API returned ${response.status}: ${errorText}`);
+      }
+
+      logger.info('Firestore backup started', { outputUri });
+    } catch (error) {
+      logger.error('Firestore backup failed', error);
+    }
+  }
+);
+
 // ─── #11: Server-side auto-draw ──────────────────────────
 // Runs every minute, checks active games with autoDrawActive=true,
 // and draws the next number if enough time has elapsed.

@@ -112,37 +112,29 @@
 
 ## Fase 11: Fremtidige Cloud Function-forbedringer (planlagt)
 
-### 11.1 HØYT — Sikkerhet & integritet
-| ID | Beskrivelse | Status |
-|----|-------------|--------|
-| CF-008 | **Juks-deteksjon.** Cloud Function som overvåker mistenkelige mønstre: kuponger med like tall, unormalt mange bingo-rop fra samme bruker | ⬜ |
-| CF-009 | **Rate limiting på kupongkjøp.** Firestore trigger som avviser kjøp om brukeren har kjøpt >X kuponger siste Y minutter | ⬜ |
-
-### 11.2 HØYT — Betaling
+### 11.1 HØYT — Betaling
 | ID | Beskrivelse | Status |
 |----|-------------|--------|
 | CF-010 | **Vipps Checkout API-integrasjon.** Ekte Vipps-betaling med webhook for automatisk bekreftelse (krever Vipps-merchantavtale) | ⬜ |
 | CF-011 | **Betalingspåminnelser.** Scheduled function som sender push-varsel til spillere med ubetalte Vipps-kuponger | ⬜ |
 
-### 11.3 MIDDELS — Statistikk & kommunikasjon
+### 11.2 MIDDELS — Kommunikasjon
 | ID | Beskrivelse | Status |
 |----|-------------|--------|
-| CF-012 | **Aggregert statistikk.** Firestore trigger som oppdaterer location-level stats (totalt spill, kuponger, gjennomsnitt spillere) | ⬜ |
-| CF-013 | **Spillerranking/leaderboard.** Automatisk oppdatert liste over spillere med flest vinnere per lokasjon | ⬜ |
 | CF-014 | **E-postvarsler.** Bekreftelse ved kupongkjøp, påminnelse om forpliktelser (via SendGrid/Mailgun) | ⬜ |
 | CF-015 | **SMS-varsler.** For spillere uten push-støtte (via Twilio) | ⬜ |
-
-### 11.4 MIDDELS — Spillforbedringer
-| ID | Beskrivelse | Status |
-|----|-------------|--------|
-| CF-016 | **Turneringsmodus.** Cloud Function som håndterer flere runder med poengberegning | ⬜ |
 | CF-017 | **Smartere push-varsler.** "Spillet starter om 10 min", "Du har 1 umarkert tall igjen!" | ⬜ |
 
-### 11.5 LAVT — Teknisk
+### 11.3 LAVT — Teknisk
 | ID | Beskrivelse | Status |
 |----|-------------|--------|
-| CF-018 | **Firestore backup.** Scheduled export av database til Cloud Storage | ⬜ |
 | CF-019 | **Bildeprosessering.** Automatisk resize/komprimering av profilbilder ved opplasting | ⬜ |
+
+---
+
+## Fase 12: Sikkerhet, turneringsmodus, mørk modus og polish — 🔄 PÅGÅR
+
+> Se `CLAUDE_STEPS_PROMPT.md` for detaljert oppgaveliste.
 
 ---
 
@@ -151,10 +143,10 @@
 | ID | Beskrivelse | Prioritet |
 |----|-------------|-----------|
 | ~~NY-006~~ | ~~Push-varsler via FCM~~ | ✅ Fase 10 |
-| NY-010 | Rate limiting → se CF-009 | Middels |
-| NY-012 | Mørk modus | Middels |
+| ~~NY-010~~ | ~~Rate limiting~~ → CF-009, Fase 12 | ✅ Fase 12 |
+| ~~NY-012~~ | ~~Mørk modus~~ → Fase 12 | ✅ Fase 12 |
 | NY-013 | Flerspråklig støtte (i18n) | Middels |
-| NY-014 | Onboarding-wizard for nye lokasjoner | Middels |
+| ~~NY-014~~ | ~~Onboarding-wizard~~ → Fase 12 | ✅ Fase 12 |
 | ~~NY-016~~ | ~~Vipps deep-link~~ → erstattet med betalingsinstruksjoner | ✅ Fase 10 |
 | NY-019 | E2E-tester med Playwright | Lav |
 
@@ -165,4 +157,3 @@
 - `locationStore.initialize()` har ingen guard mot dobbelt-initialisering i StrictMode (lav prioritet)
 - CommitmentsTable bruker rå HTML-knapper i stedet for Button-komponenten (kosmetisk)
 - Framer Motion `ref`-advarsel i konsollen (kosmetisk, fra AnimatePresence)
-- Firebase-chunken er 577 KB — kan splittes med manuell chunking i Vite config

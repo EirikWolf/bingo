@@ -79,8 +79,12 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore'],
+          'firebase-core': ['firebase/app'],
+          'firebase-auth': ['firebase/auth'],
+          'firebase-firestore': ['firebase/firestore'],
+          'firebase-messaging': ['firebase/messaging'],
           react: ['react', 'react-dom', 'react-router-dom'],
+          vendor: ['zustand', 'react-hot-toast', 'framer-motion', 'canvas-confetti', 'qrcode.react'],
         },
       },
     },

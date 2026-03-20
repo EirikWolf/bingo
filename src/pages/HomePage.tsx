@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLocationStore } from '@/stores/locationStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
 import { Button } from '@/components/ui/Button';
+import { OnboardingWizard } from '@/components/admin/OnboardingWizard';
 import { signOut } from '@/services/auth';
 import type { Location } from '@/types';
 
@@ -13,6 +14,7 @@ export default function HomePage() {
   const navigate = useNavigate();
   const { locations, loading, initialize } = useLocationStore();
   const user = useAuthStore((s) => s.user);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
     const unsub = initialize();
@@ -24,10 +26,10 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-bingo-50 to-white">
+    <div className="min-h-screen bg-gradient-to-b from-bingo-50 to-white dark:from-gray-900 dark:to-gray-800">
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-4">
-        <h1 className="text-xl font-bold text-bingo-800">BingoPortalen</h1>
+        <h1 className="text-xl font-bold text-bingo-800 dark:text-bingo-300">BingoPortalen</h1>
         <div className="flex items-center gap-2">
           {user && (
             <>
@@ -57,15 +59,20 @@ export default function HomePage() {
           <div className="flex justify-center py-12">
             <Spinner size="lg" />
           </div>
+        ) : showOnboarding && user ? (
+          <OnboardingWizard
+            userId={user.uid}
+            onComplete={() => setShowOnboarding(false)}
+          />
         ) : locations.length === 0 ? (
           <Card className="text-center">
-            <p className="text-gray-500">Ingen lokasjoner tilgjengelig ennå.</p>
-            {user?.role === 'superadmin' && (
+            <p className="text-gray-500 dark:text-gray-400">Ingen lokasjoner tilgjengelig ennå.</p>
+            {user && (
               <Button
                 className="mt-3"
-                onClick={() => navigate('/admin')}
+                onClick={() => setShowOnboarding(true)}
               >
-                Opprett lokasjon
+                Opprett ny lokasjon
               </Button>
             )}
           </Card>

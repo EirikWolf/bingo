@@ -214,9 +214,9 @@ export default function GamePage() {
   const statusLabel = game ? GAME_STATUS_LABELS[game.status] ?? game.status : 'Ingen spill';
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-24">
       {/* Header */}
-      <header className="bg-white border-b border-gray-100 px-4 py-3">
+      <header className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 px-4 py-3">
         <div className="flex items-center justify-between">
           <button onClick={() => navigate('/')} className="text-bingo-600 text-sm">
             ← Tilbake

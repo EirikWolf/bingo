@@ -335,14 +335,14 @@ export default function BigScreenPage() {
             {game.drawnNumbers.length > 1 && (
               <div>
                 <p className="text-center text-xs text-bingo-400 mb-2">Forrige tall</p>
-                <div className="flex flex-wrap gap-2 justify-center">
+                <div className="flex flex-wrap gap-3 justify-center">
                   {game.drawnNumbers
                     .slice(-6, -1)
                     .reverse()
                     .map((num) => (
                       <div
                         key={num}
-                        className={`number-ball h-10 w-10 text-sm ${getBallColorClass(num)}`}
+                        className={`number-ball h-20 w-20 text-xl font-bold ${getBallColorClass(num)}`}
                       >
                         {num}
                       </div>

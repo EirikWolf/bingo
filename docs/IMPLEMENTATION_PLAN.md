@@ -13,6 +13,9 @@
 | 6 | Vipps + SMS + varsler | 1 økt | Fase 5 |
 | 7 | Dev-admin + testdata | 1 økt | Fase 2 |
 | 8 | PWA + offline + polish | 1-2 økter | Fase 6 |
+| 9 | Videreutvikling | 3-4 økter | Fase 8 |
+| 10 | Cloud Functions & serverlogikk | 2-3 økter | Fase 9 |
+| 12 | Sikkerhet, turneringsmodus, mørk modus, polish | 2-3 økter | Fase 10 |
 
 ---
 
@@ -24,7 +27,7 @@ Alt som må på plass før funksjonell kode skrives.
 - [ ] Installer avhengigheter: firebase, react-router-dom, zustand, tailwindcss, framer-motion, react-hot-toast, qrcode.react
 - [ ] Konfigurer Tailwind med bingo-fargepalett (ball-b/i/n/g/o) og animasjoner
 - [ ] Sett opp Firebase-init (`src/services/firebase.ts`) med emulatorstøtte
-- [ ] Sett opp `firebase.json` (Hosting + Firestore-emulatorer, ingen Functions)
+- [ ] Sett opp `firebase.json` (Hosting + Firestore-emulatorer + Functions)
 - [ ] Skriv alle TypeScript-typer i `src/types/index.ts`
 - [ ] Opprett `couponGenerator.ts` og `bingoValidator.ts` med enhetstester
 - [ ] Opprett `constants.ts` med kolonnefarger, tallområder, labels
@@ -164,3 +167,52 @@ Alt som må på plass før funksjonell kode skrives.
 - [ ] Oppdater manifest.json med endelige ikoner
 
 **Ferdig-kriterium:** PWA installerbar, offline-kapabel, tilgjengelig, og performant.
+
+---
+
+## Fase 9 — Videreutvikling
+
+Diverse forbedringer og nye funksjoner etter MVP.
+
+- [x] Spillhistorikk-side
+- [x] Aggregert statistikk og leaderboard
+- [x] Auto-trekning med konfigurerbar timer
+- [x] Admin-administrasjon i innstillinger
+- [x] Storskjermkontroller for innloggede admins
+- [x] QR-kode på storskjerm for enkel tilgang
+
+**Ferdig-kriterium:** Forbedret brukeropplevelse med statistikk, auto-trekning og storskjermkontroll.
+
+---
+
+## Fase 10 — Cloud Functions & serverlogikk
+
+Firebase Cloud Functions v2 for server-side validering, push-varsler og automatisering.
+
+- [x] `onBingoClaimCreated` — Server-side bingo-validering
+- [x] `onGameStatusChanged` — FCM push ved spillstart/avslutning
+- [x] `onBingoClaimNotify` — FCM push til admin ved bingo-rop
+- [x] `onPaymentConfirmed` — FCM push ved betalingsbekreftelse
+- [x] `onGameStatsUpdate` — Aggregert lokasjonsstatistikk
+- [x] `onWinnerLeaderboardUpdate` — Leaderboard-oppdatering ved vinnere
+- [x] `onGameFinishedUpdateLeaderboard` — Oppdater gamesPlayed ved spillslutt
+- [x] `onClaimServerValidated` — Logg avvik mellom klient/server-validering
+- [x] `autoDrawScheduler` — Server-side auto-trekning (hvert minutt)
+- [x] `dailyCleanup` — Daglig opprydding av gammel data
+
+**Ferdig-kriterium:** 10 Cloud Functions deployet og aktive i produksjon.
+
+---
+
+## Fase 12 — Sikkerhet, turneringsmodus, mørk modus og polish
+
+- [x] `onCouponCheatCheck` — Juks-deteksjon ved kupongkjøp
+- [x] `onClaimCheatCheck` — Flagging av mistenkelige bingo-rop
+- [x] `onCouponRateLimit` — Rate limiting på kupongkjøp (>10/5min)
+- [x] `onTournamentRoundFinished` — Turneringsmodus med 3-2-1 poengberegning
+- [x] `dailyFirestoreBackup` — Daglig Firestore-backup til Cloud Storage
+- [x] Mørk modus (Tailwind `darkMode: 'class'`, theme store, globale CSS-overrides)
+- [x] Onboarding-wizard (5-trinns veiviser for ny lokasjon)
+- [x] Firebase-chunk splitting (4 separate chunks + vendor-chunk)
+
+**Ferdig-kriterium:** 15 Cloud Functions totalt, mørk modus, onboarding, og optimalisert bundle.

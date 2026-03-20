@@ -2,8 +2,14 @@
 
 ## Hvorfor dette er kritisk
 
-Uten Cloud Functions er Firestore Security Rules **den eneste sikkerhetsbarrieren**.
+Firestore Security Rules er **førstelinjeforsvaret** for autorisasjon og datavalidering.
 Enhver klient kan sende vilkårlige skriveforespørsler — reglene må fange alt.
+
+Cloud Functions gir **andrelinje sikkerhet** med server-side validering:
+- `onBingoClaimCreated` — validerer bingo-rop server-side
+- `onCouponCheatCheck` — sjekker for juks ved kupongkjøp
+- `onClaimCheatCheck` — oppdager mistenkelig mange bingo-rop
+- `onCouponRateLimit` — flagger unormalt kjøpstempo
 
 ## Prinsipp: Defense in depth
 
@@ -11,6 +17,7 @@ Enhver klient kan sende vilkårlige skriveforespørsler — reglene må fange al
 2. **Autorisasjon** — har brukeren riktig rolle for denne operasjonen?
 3. **Datavalidering** — har dataene korrekt format og gyldige verdier?
 4. **Tilstandssjekk** — er systemet i riktig tilstand for denne operasjonen?
+5. **Server-validering** — Cloud Functions bekrefter og flagger mistenkelig aktivitet
 
 ## Regler per samling
 

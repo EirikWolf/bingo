@@ -295,7 +295,7 @@ export function CommitmentsTable({ locationId, adminUid, locationName, vippsNumb
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100 text-left text-xs text-gray-500 uppercase">
+              <tr className="border-b border-gray-100 dark:border-gray-700 text-left text-xs text-gray-500 dark:text-gray-400 uppercase">
                 <th className="px-3 py-2 w-8">
                   <input
                     type="checkbox"
@@ -327,7 +327,7 @@ export function CommitmentsTable({ locationId, adminUid, locationName, vippsNumb
                 </tr>
               )}
               {displayed.map((c) => (
-                <tr key={c.id} className="border-b border-gray-50 hover:bg-gray-50">
+                <tr key={c.id} className="border-b border-gray-50 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                   <td className="px-3 py-2">
                     {c.status === 'pending' && (
                       <input
@@ -362,22 +362,26 @@ export function CommitmentsTable({ locationId, adminUid, locationName, vippsNumb
                           <span className="text-xs text-gray-400 animate-pulse">Lagrer...</span>
                         ) : (
                           <>
-                            <button
+                            <Button
+                              size="sm"
+                              variant="ghost"
                               onClick={() => handleStatusChange(c.id, 'confirmed')}
                               disabled={processingIds.has(c.id)}
-                              className="rounded px-2 py-1 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 disabled:opacity-50"
+                              className="!px-2 !py-1 !text-xs text-green-700 bg-green-50 hover:bg-green-100 dark:text-green-400 dark:bg-green-900/30 dark:hover:bg-green-900/50"
                               title="Bekreft"
                             >
                               ✓
-                            </button>
-                            <button
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
                               onClick={() => handleStatusChange(c.id, 'cancelled')}
                               disabled={processingIds.has(c.id)}
-                              className="rounded px-2 py-1 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 disabled:opacity-50"
+                              className="!px-2 !py-1 !text-xs text-red-700 bg-red-50 hover:bg-red-100 dark:text-red-400 dark:bg-red-900/30 dark:hover:bg-red-900/50"
                               title="Kanseller"
                             >
                               ✕
-                            </button>
+                            </Button>
                           </>
                         )
                       )}

@@ -1,6 +1,6 @@
-# Fase 12: Sikkerhet, turneringsmodus, mørk modus og polish
+# Fase 12: Sikkerhet, turneringsmodus, mørk modus og polish — ✅ FULLFØRT
 
-> Startet: 2026-03-20
+> Startet: 2026-03-20 | Fullført: 2026-03-22
 
 ## Oppgaver
 
@@ -18,3 +18,13 @@
 - Fase 9: Videreutvikling (13/19)
 - Fase 10: Cloud Functions & serverlogikk
 - Fase 12: Sikkerhet, turneringsmodus, mørk modus og polish
+
+## Neste steg (Fase 11 / fremtidig)
+
+- CF-010: Vipps Checkout API-integrasjon (krever merchantavtale)
+- CF-011: Betalingspåminnelser
+- CF-014: E-postvarsler (SendGrid/Mailgun)
+- CF-015: SMS-varsler (Twilio)
+- CF-017: Smartere push-varsler
+- NY-013: Flerspråklig støtte (i18n)
+- NY-019: E2E-tester med Playwright

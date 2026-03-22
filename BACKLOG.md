@@ -76,14 +76,14 @@
 
 - ✅ **NY-008: Telefonnummervalidering.** Norsk format (8 siffer ± +47). Sanntidsvalidering i ProfilePage. Auto-normalisering til +47-format ved lagring.
 - ✅ **NY-009: Forfalt-status beregning.** Klientside beregning: forpliktelser eldre enn 30 dager med status `pending` vises som `overdue`. Synlig i CommitmentsTable med forfalt-filter og oppsummering.
-- ⬜ **NY-010: Rate limiting på kupongkjøp.** Ikke implementert — Firestore-regler mangler god primitiv for tidbasert rate limiting. `maxCouponsPerPlayer` gir tilstrekkelig beskyttelse.
+- ✅ **NY-010: Rate limiting på kupongkjøp.** Implementert i Fase 12 som CF-009 — Cloud Function flagger >10 kuponger per 5 min.
 
 ### 9.4 MIDDELS — Brukeropplevelse
 
 - ✅ **NY-011: Historikk — Se tidligere spill.** Ny side `/historikk/:locationId`. Viser avsluttede spill med vinnere, statistikk, og utvidbare trukne tall. Tilgjengelig fra spillersiden.
-- ⬜ **NY-012: Mørk modus.** Ikke implementert — krever gjennomgående `dark:`-klasser på alle komponenter.
+- ✅ **NY-012: Mørk modus.** Implementert i Fase 12 — Tailwind `darkMode: 'class'`, Zustand theme store, globale CSS-overrides.
 - ⬜ **NY-013: Flerspråklig støtte (i18n).** Ikke implementert — krever refaktorering av alle strenger.
-- ⬜ **NY-014: Onboarding-wizard.** Ikke implementert.
+- ✅ **NY-014: Onboarding-wizard.** Implementert i Fase 12 — 5-trinns veiviser for ny lokasjon.
 
 ### 9.5 LAVT — Teknisk gjeld og polish
 
@@ -132,9 +132,15 @@
 
 ---
 
-## Fase 12: Sikkerhet, turneringsmodus, mørk modus og polish — 🔄 PÅGÅR
+## Fase 12: Sikkerhet, turneringsmodus, mørk modus og polish — ✅ IMPLEMENTERT
 
-> Se `CLAUDE_STEPS_PROMPT.md` for detaljert oppgaveliste.
+- ✅ CF-008: Juks-deteksjon (kupong-validering + bingo-rop-overvåkning)
+- ✅ CF-009: Rate limiting på kupongkjøp (>10/5min)
+- ✅ CF-016: Turneringsmodus med poengberegning (3-2-1)
+- ✅ CF-018: Daglig Firestore-backup til Cloud Storage (02:00 CET)
+- ✅ NY-012: Mørk modus (Tailwind class-basert, Zustand theme store)
+- ✅ NY-014: Onboarding-wizard (5-trinns veiviser)
+- ✅ Firebase-chunk splitting (4 separate chunks + vendor)
 
 ---
 

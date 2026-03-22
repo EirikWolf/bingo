@@ -271,11 +271,11 @@ Firebase Blaze-plan (pay-as-you-go) kreves.
 | `onBingoClaimCreated` | `onCreate` bingo_claims | Server-side validering av bingo-rop. Sjekker kupong mot trukne tall og finner gevinsttype. |
 | `onGameStatusChanged` | `onUpdate` games | Sender FCM push-varsel til lokasjonsmedlemmer ved spillstart/avslutning. |
 | `onBingoClaimNotify` | `onCreate` bingo_claims | Sender FCM push til admin ved nytt bingo-rop. |
-| `onPaymentConfirmed` | `onUpdate` coupons | Sender FCM push til spiller ved betalingsbekreftelse. |
+| `onPaymentConfirmed` | `onUpdate` coupons | Auto-bekrefter forpliktelse når kupongbetaling markeres som betalt. |
 | `onGameStatsUpdate` | `onUpdate` games | Oppdaterer `LocationStats`-aggregat ved spillendringer. |
 | `onWinnerLeaderboardUpdate` | `onUpdate` games | Oppdaterer leaderboard ved nye vinnere. |
 | `onGameFinishedUpdateLeaderboard` | `onUpdate` games | Oppdaterer `gamesPlayed` for alle spillere ved spillslutt. |
-| `onClaimServerValidated` | `onUpdate` bingo_claims | Logger avvik mellom klient-foreslått og server-validert gevinsttype. |
+| `onClaimServerValidated` | `onUpdate` bingo_claims | Auto-godkjenner gyldige bingo-rop uten admin-inngrep. Oppdaterer claim, kupong og game.winners i batch. |
 | `onCouponCheatCheck` | `onCreate` coupons | **Sikkerhet:** Sjekker for duplikattall, ugyldige tallområder og feil kolonneplassering. Flagger til admin. |
 | `onClaimCheatCheck` | `onCreate` bingo_claims | **Sikkerhet:** Flagger brukere med >3 bingo-rop i samme spill. |
 | `onCouponRateLimit` | `onCreate` coupons | **Sikkerhet:** Flagger brukere som kjøper >10 kuponger på 5 minutter. |

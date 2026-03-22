@@ -28,6 +28,7 @@ export default function BigScreenPage() {
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoDrawRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevCurrentNumberRef = useRef<number | null>(null);
+  const handleDrawRef = useRef<() => Promise<void>>(async () => {});
 
   const isAdmin = user?.uid ? (location?.adminUids.includes(user.uid) ?? false) : false;
 
@@ -137,6 +138,9 @@ export default function BigScreenPage() {
     }
   }, [locationId, game, availableNumbers, drawing]);
 
+  // Keep ref in sync so the auto-draw interval always calls the latest version
+  handleDrawRef.current = handleDraw;
+
   async function handleStartAutoDraw() {
     if (!locationId || !game) return;
     setAutoDrawEnabled(true);
@@ -151,7 +155,7 @@ export default function BigScreenPage() {
     await updateAutoDrawState(locationId, game.id, false, autoDrawInterval * 1000);
   }
 
-  // Auto-draw loop — actually draws numbers on interval
+  // Auto-draw loop — uses ref to avoid restarting interval on every draw
   useEffect(() => {
     if (autoDrawRef.current) {
       clearInterval(autoDrawRef.current);
@@ -162,7 +166,7 @@ export default function BigScreenPage() {
       countdownRef.current = null;
     }
 
-    if (autoDrawEnabled && game?.status === 'active' && availableNumbers.length > 0 && isAdmin) {
+    if (autoDrawEnabled && game?.status === 'active' && isAdmin) {
       const intervalMs = autoDrawInterval * 1000;
       let nextDrawTime = Date.now() + intervalMs;
 
@@ -174,7 +178,7 @@ export default function BigScreenPage() {
       countdownRef.current = setInterval(tick, 500);
 
       autoDrawRef.current = setInterval(() => {
-        handleDraw();
+        handleDrawRef.current();
         nextDrawTime = Date.now() + intervalMs;
       }, intervalMs);
     } else if (!isAdmin && autoDrawEnabled) {
@@ -203,7 +207,7 @@ export default function BigScreenPage() {
         countdownRef.current = null;
       }
     };
-  }, [autoDrawEnabled, game?.status, availableNumbers.length, autoDrawInterval, handleDraw, isAdmin, game?.lastDrawAt, game?.autoDrawIntervalMs]);
+  }, [autoDrawEnabled, game?.status, autoDrawInterval, isAdmin, game?.lastDrawAt, game?.autoDrawIntervalMs]);
 
   // Stop auto-draw when game is not active
   useEffect(() => {

@@ -4,10 +4,15 @@ import { getMessaging } from 'firebase-admin/messaging';
 import {
   onDocumentCreated,
   onDocumentUpdated,
+  onDocumentWritten,
 } from 'firebase-functions/v2/firestore';
+import { setGlobalOptions } from 'firebase-functions/v2';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { logger } from 'firebase-functions/v2';
 import { findWinCondition } from './bingoValidator';
+
+// Runtime: Node.js 22 (configured in firebase.json)
+setGlobalOptions({ region: 'us-central1' });
 
 initializeApp();
 const db = getFirestore();

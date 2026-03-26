@@ -1,16 +1,14 @@
-# Fase 12: Sikkerhet, turneringsmodus, mørk modus og polish — ✅ FULLFØRT
+# Fase 13: Stabilisering, oppgraderinger og smarte varsler — ✅ FULLFØRT
 
-> Startet: 2026-03-20 | Fullført: 2026-03-22
+> Startet: 2026-03-26 | Fullført: 2026-03-26
 
 ## Oppgaver
 
-- [x] **CF-008: Juks-deteksjon.** Cloud Function som overvåker kuponger for duplikattall, feil kolonneplassering, ugyldige tall. Separat sjekk for bingo-rop-mønstre (>3 fra samme bruker). Admin-varsling via push.
-- [x] **CF-009: Rate limiting på kupongkjøp.** Firestore trigger som flagger kuponger om brukeren har kjøpt >10 siste 5 minutter. Admin-varsling.
-- [x] **CF-016: Turneringsmodus.** Cloud Function som håndterer flere runder med poengberegning (3-2-1 poeng). Automatisk oppdatering av standings. Push-varsel ved turneringsvinner.
-- [x] **NY-012: Mørk modus.** Tailwind `darkMode: 'class'`, Zustand theme store med persist, toggle i profil (lys/mørk/system), global CSS-overrides for inputs/labels/tekst/bakgrunner. Alle UI-komponenter (Card, Button, Modal, Badge) har dark:-klasser.
-- [x] **NY-014: Onboarding-wizard.** 5-trinns veiviser (velkomst → navn → forpliktelse → innstillinger → ferdig) på forsiden. Oppretter lokasjon og konfigurerer grunninnstillinger.
-- [x] **CF-018: Firestore backup.** Scheduled Cloud Function som eksporterer database til Cloud Storage daglig kl 02:00 CET via Firestore Admin REST API.
-- [x] **Firebase-chunk splitting.** Delt Firebase-chunk fra 577KB til 4 separate: core, auth (176KB), firestore (401KB), messaging (43KB). Vendor-chunk for zustand/framer-motion/etc.
+- [x] **Fiks auto-trekning.** Global `useAutoDraw`-hook i App.tsx erstatter per-side auto-draw loops. Fungerer uavhengig av hvilken side admin befinner seg på. BigScreen og AdminPage viser kun countdown.
+- [x] **Oppgrader Node.js runtime til 22.** Cloud Functions oppgradert fra Node.js 20 til 22 (Node 20 deprekeres 2026-04-30).
+- [x] **Oppgrader firebase-functions.** Oppdatert fra v5 til v6, firebase-admin fra v12 til v13.
+- [x] **CF-017: Smartere push-varsler.** `onGameStartedNotify` — personlig push ved trekkingstart ("Du har X kuponger. Lykke til!"). `unmarkedNumbersReminder` — hvert 5. minutt, push til spillere med 3+ umarkerte treff.
+- [x] **Teknisk gjeld.** Double-init guard i locationStore. CommitmentsTable brukte allerede Button-komponent. Framer Motion ref-advarsel er kosmetisk (løst i v12).
 
 ## Fullførte faser
 
@@ -18,13 +16,14 @@
 - Fase 9: Videreutvikling (13/19)
 - Fase 10: Cloud Functions & serverlogikk
 - Fase 12: Sikkerhet, turneringsmodus, mørk modus og polish
+- Fase 13: Stabilisering, oppgraderinger og smarte varsler
 
-## Neste steg (Fase 11 / fremtidig)
+## Gjenstående (fremtidig / krever ekstern oppsett)
 
-- CF-010: Vipps Checkout API-integrasjon (krever merchantavtale)
-- CF-011: Betalingspåminnelser
-- CF-014: E-postvarsler (SendGrid/Mailgun)
-- CF-015: SMS-varsler (Twilio)
-- CF-017: Smartere push-varsler
-- NY-013: Flerspråklig støtte (i18n)
+- CF-010: Vipps Checkout API (krever merchantavtale)
+- CF-011: Betalingspåminnelser (avhenger av CF-010)
+- CF-014: E-postvarsler (krever SendGrid/Mailgun-konto)
+- CF-015: SMS-varsler (krever Twilio-konto)
+- CF-019: Bildeprosessering
+- NY-013: Flerspråklig støtte (i18n) — stor refaktorering
 - NY-019: E2E-tester med Playwright

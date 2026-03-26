@@ -123,7 +123,7 @@
 |----|-------------|--------|
 | CF-014 | **E-postvarsler.** Bekreftelse ved kupongkjøp, påminnelse om forpliktelser (via SendGrid/Mailgun) | ⬜ |
 | CF-015 | **SMS-varsler.** For spillere uten push-støtte (via Twilio) | ⬜ |
-| CF-017 | **Smartere push-varsler.** "Spillet starter om 10 min", "Du har 1 umarkert tall igjen!" | ⬜ |
+| CF-017 | **Smartere push-varsler.** "Trekningen starter!" med kupongantall, "Du har umarkerte treff!" påminnelse | ✅ |
 
 ### 11.3 LAVT — Teknisk
 | ID | Beskrivelse | Status |
@@ -160,6 +160,6 @@
 
 ## Teknisk gjeld (vedvarende)
 
-- `locationStore.initialize()` har ingen guard mot dobbelt-initialisering i StrictMode (lav prioritet)
-- CommitmentsTable bruker rå HTML-knapper i stedet for Button-komponenten (kosmetisk)
-- Framer Motion `ref`-advarsel i konsollen (kosmetisk, fra AnimatePresence)
+- ~~`locationStore.initialize()` har ingen guard mot dobbelt-initialisering i StrictMode~~ ✅ Fikset
+- ~~CommitmentsTable bruker rå HTML-knapper~~ ✅ Allerede fikset (bruker Button-komponent)
+- Framer Motion `ref`-advarsel i konsollen (kosmetisk, fra AnimatePresence — løst i framer-motion v12)

@@ -48,7 +48,6 @@ export default function AdminPage() {
   const [autoDrawEnabled, setAutoDrawEnabled] = useState(false);
   const [autoDrawInterval, setAutoDrawInterval] = useState(5);
   const [countdown, setCountdown] = useState(0);
-  const autoDrawRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Status transition
@@ -188,6 +187,15 @@ export default function AdminPage() {
     prevClaimsCountRef.current = claims.length;
   }, [claims, autoDrawEnabled, locationId, game, autoDrawInterval]);
 
+  // Sync autoDrawEnabled from Firestore (actual drawing handled by global useAutoDraw hook)
+  useEffect(() => {
+    if (game?.autoDrawActive && game.status === 'active') {
+      setAutoDrawEnabled(true);
+    } else {
+      setAutoDrawEnabled(false);
+    }
+  }, [game?.autoDrawActive, game?.status]);
+
   // NOTE: Speech announcements are handled by BigScreenPage only
   // to avoid double announcements when both are open in the same browser.
   // We still track currentNumber to update prevCurrentNumberRef.
@@ -227,59 +235,35 @@ export default function AdminPage() {
     }
   }, [locationId, game, availableNumbers, drawing]);
 
-  // Auto-draw with countdown
+  // Countdown display — uses Firestore timestamps (drawing handled by global useAutoDraw hook)
   useEffect(() => {
-    // Clear existing timers
-    if (autoDrawRef.current) {
-      clearInterval(autoDrawRef.current);
-      autoDrawRef.current = null;
-    }
     if (countdownRef.current) {
       clearInterval(countdownRef.current);
       countdownRef.current = null;
     }
 
-    if (autoDrawEnabled && game?.status === 'active' && availableNumbers.length > 0) {
-      const intervalMs = autoDrawInterval * 1000;
-      let nextDrawTime = Date.now() + intervalMs;
-
-      // Use real-time countdown to avoid drift in background tabs
+    if (autoDrawEnabled && game?.status === 'active') {
+      const intervalMs = game?.autoDrawIntervalMs || autoDrawInterval * 1000;
       const tick = () => {
-        const remaining = Math.max(0, Math.ceil((nextDrawTime - Date.now()) / 1000));
+        if (!game?.lastDrawAt) return;
+        const lastDrawTime = game.lastDrawAt.toDate().getTime();
+        const elapsed = Date.now() - lastDrawTime;
+        const remaining = Math.max(0, Math.ceil((intervalMs - elapsed) / 1000));
         setCountdown(remaining);
       };
       tick();
-
-      // Countdown ticker (every second, time-based)
       countdownRef.current = setInterval(tick, 500);
-
-      // Draw ticker
-      autoDrawRef.current = setInterval(() => {
-        handleDraw();
-        nextDrawTime = Date.now() + intervalMs;
-      }, intervalMs);
     } else {
       setCountdown(0);
     }
 
     return () => {
-      if (autoDrawRef.current) {
-        clearInterval(autoDrawRef.current);
-        autoDrawRef.current = null;
-      }
       if (countdownRef.current) {
         clearInterval(countdownRef.current);
         countdownRef.current = null;
       }
     };
-  }, [autoDrawEnabled, game?.status, availableNumbers.length, autoDrawInterval, handleDraw]);
-
-  // Stop auto-draw when game is not active
-  useEffect(() => {
-    if (game?.status !== 'active') {
-      setAutoDrawEnabled(false);
-    }
-  }, [game?.status]);
+  }, [autoDrawEnabled, game?.status, game?.lastDrawAt, game?.autoDrawIntervalMs, autoDrawInterval]);
 
   // Sync sound effects settings
   useEffect(() => {
@@ -550,12 +534,9 @@ export default function AdminPage() {
                 variant={autoDrawEnabled ? 'secondary' : 'primary'}
                 disabled={availableNumbers.length === 0}
                 onClick={() => {
-                  setAutoDrawEnabled(true);
                   if (locationId && game) {
                     updateAutoDrawState(locationId, game.id, true, autoDrawInterval * 1000);
                   }
-                  // Draw immediately when starting
-                  if (!autoDrawEnabled) handleDraw();
                 }}
                 className={autoDrawEnabled ? 'opacity-50' : ''}
               >
@@ -566,7 +547,6 @@ export default function AdminPage() {
                 variant="secondary"
                 disabled={!autoDrawEnabled}
                 onClick={() => {
-                  setAutoDrawEnabled(false);
                   setCountdown(0);
                   if (locationId && game) {
                     updateAutoDrawState(locationId, game.id, false, autoDrawInterval * 1000);

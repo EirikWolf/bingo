@@ -1057,3 +1057,132 @@ export const dailyCleanup = onSchedule(
     });
   }
 );
+
+// ─── CF-017: Smarter push notifications ──────────────────
+
+/**
+ * When game transitions to 'active', notify players who have coupons
+ * with "Spillet har startet! Du har X kuponger."
+ */
+export const onGameStartedNotify = onDocumentUpdated(
+  'locations/{locationId}/games/{gameId}',
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!before || !after) return;
+
+    // Only trigger when game starts (open → active)
+    if (before.status !== 'open' || after.status !== 'active') return;
+
+    const { locationId, gameId } = event.params;
+
+    const locationSnap = await db.doc(`locations/${locationId}`).get();
+    const locationName = locationSnap.data()?.name ?? 'Bingo';
+
+    // Find all players with coupons in this game
+    const couponsSnap = await db
+      .collection(`locations/${locationId}/games/${gameId}/coupons`)
+      .get();
+
+    // Group coupons per user
+    const userCouponCount = new Map<string, number>();
+    for (const couponDoc of couponsSnap.docs) {
+      const userId = couponDoc.data().userId as string;
+      userCouponCount.set(userId, (userCouponCount.get(userId) ?? 0) + 1);
+    }
+
+    // Send personalized notification to each player
+    for (const [userId, count] of userCouponCount) {
+      const tokenSnap = await db.collection(`users/${userId}/fcmTokens`).get();
+      const tokens = tokenSnap.docs.map((d) => d.data().token as string);
+
+      if (tokens.length > 0) {
+        const plural = count === 1 ? 'kupong' : 'kuponger';
+        await sendToTokens(
+          tokens,
+          `${locationName} — Trekningen starter!`,
+          `Du har ${count} ${plural}. Lykke til!`,
+          `/spill/${locationId}`
+        );
+      }
+    }
+
+    logger.info('Sent game start notifications', {
+      locationId,
+      gameId,
+      playerCount: userCouponCount.size,
+    });
+  }
+);
+
+/**
+ * Periodic check: notify players who have unmarked matching numbers.
+ * Runs every 5 minutes. For each active game, find coupons where drawn
+ * numbers haven't been manually marked (in case auto-mark is off or
+ * player hasn't opened the app). Sends "Du har umarkerte tall!" push.
+ */
+export const unmarkedNumbersReminder = onSchedule(
+  { schedule: 'every 5 minutes', timeoutSeconds: 60 },
+  async () => {
+    // Find all active games
+    const locationsSnap = await db
+      .collection('locations')
+      .where('activeGameId', '!=', null)
+      .get();
+
+    let notifiedCount = 0;
+
+    for (const locDoc of locationsSnap.docs) {
+      const loc = locDoc.data();
+      const gameRef = db.doc(`locations/${locDoc.id}/games/${loc.activeGameId}`);
+      const gameSnap = await gameRef.get();
+      if (!gameSnap.exists) continue;
+
+      const game = gameSnap.data()!;
+      if (game.status !== 'active') continue;
+
+      const drawnSet = new Set<number>(game.drawnNumbers ?? []);
+      if (drawnSet.size < 5) continue; // Too early to bother
+
+      // Check coupons
+      const couponsSnap = await db
+        .collection(`locations/${locDoc.id}/games/${loc.activeGameId}/coupons`)
+        .get();
+
+      for (const couponDoc of couponsSnap.docs) {
+        const coupon = couponDoc.data();
+        const numbers = coupon.numbers as number[];
+        const marked = coupon.markedCells as boolean[];
+
+        // Count how many drawn numbers are NOT marked on this coupon
+        let unmarkedCount = 0;
+        for (let i = 0; i < numbers.length; i++) {
+          if (numbers[i] !== 0 && drawnSet.has(numbers[i]!) && !marked[i]) {
+            unmarkedCount++;
+          }
+        }
+
+        // Only notify if 3+ unmarked matches (significant gap)
+        if (unmarkedCount >= 3) {
+          const userId = coupon.userId as string;
+          const tokenSnap = await db.collection(`users/${userId}/fcmTokens`).get();
+          const tokens = tokenSnap.docs.map((d) => d.data().token as string);
+
+          if (tokens.length > 0) {
+            await sendToTokens(
+              tokens,
+              'Sjekk kupongene dine!',
+              `Du har ${unmarkedCount} umarkerte treff. Åpne appen og marker dem!`,
+              `/spill/${locDoc.id}`
+            );
+            notifiedCount++;
+          }
+        }
+      }
+    }
+
+    if (notifiedCount > 0) {
+      logger.info(`Sent unmarked-number reminders to ${notifiedCount} players`);
+    }
+  }
+);

@@ -1,6 +1,7 @@
 import { useEffect, Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
+import { useAutoDraw } from '@/hooks/useAutoDraw';
 import '@/stores/themeStore'; // Initialize theme on app start (applies dark class to <html>)
 import { Spinner } from '@/components/ui/Spinner';
 import { InstallPrompt } from '@/components/ui/InstallPrompt';
@@ -26,6 +27,7 @@ function PageSpinner() {
 
 export default function App() {
   const { firebaseUser, loading, initialize } = useAuthStore();
+  useAutoDraw(); // Global auto-draw loop for admins — works on any page
 
   useEffect(() => {
     const unsub = initialize();

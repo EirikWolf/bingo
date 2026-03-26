@@ -280,6 +280,7 @@ Firebase Blaze-plan (pay-as-you-go) kreves.
 | `onClaimCheatCheck` | `onCreate` bingo_claims | **Sikkerhet:** Flagger brukere med >3 bingo-rop i samme spill. |
 | `onCouponRateLimit` | `onCreate` coupons | **Sikkerhet:** Flagger brukere som kjøper >10 kuponger på 5 minutter. |
 | `onTournamentRoundFinished` | `onUpdate` games | Beregner turneringspoeng (3-2-1) og oppdaterer standings ved rundeslutt. |
+| `onGameStartedNotify` | `onUpdate` games | Sender personlig FCM push til spillere med kuponger ved trekkingstart ("Du har X kuponger. Lykke til!"). |
 
 ### Planlagte funksjoner (Scheduler)
 
@@ -288,13 +289,14 @@ Firebase Blaze-plan (pay-as-you-go) kreves.
 | `autoDrawScheduler` | Hvert minutt | Trekker neste tall for spill med `autoDrawActive: true`. |
 | `dailyCleanup` | Daglig kl 03:00 CET | Rydder opp utløpte/ferdige spill og gammel data. |
 | `dailyFirestoreBackup` | Daglig kl 02:00 CET | Eksporterer hele Firestore til Cloud Storage via REST API. |
+| `unmarkedNumbersReminder` | Hvert 5. minutt | Sender push til spillere med 3+ umarkerte treff på kupongene sine. |
 
 ### Mappestruktur
 
 ```
 functions/
 ├── src/
-│   ├── index.ts            # Alle Cloud Functions (15 stk)
+│   ├── index.ts            # Alle Cloud Functions (17 stk)
 │   └── bingoValidator.ts   # Server-side gevinst-sjekk (delt logikk med klient)
 ├── package.json            # firebase-admin + firebase-functions v5
 └── tsconfig.json

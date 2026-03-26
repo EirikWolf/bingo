@@ -10,16 +10,27 @@ interface LocationState {
   selectLocation: (locationId: string) => void;
 }
 
+let initUnsub: (() => void) | null = null;
+
 export const useLocationStore = create<LocationState>((set) => ({
   locations: [],
   loading: true,
   selectedLocationId: null,
 
   initialize: () => {
-    const unsub = listenToLocations((locations) => {
+    // Guard against double-init in StrictMode
+    if (initUnsub) {
+      initUnsub();
+    }
+    initUnsub = listenToLocations((locations) => {
       set({ locations, loading: false });
     });
-    return unsub;
+    return () => {
+      if (initUnsub) {
+        initUnsub();
+        initUnsub = null;
+      }
+    };
   },
 
   selectLocation: (locationId: string) => {

@@ -47,12 +47,21 @@ export const useThemeStore = create<ThemeStore>()(
   )
 );
 
-// Listen for system preference changes
+// Listen for system preference changes (keep reference for cleanup during HMR)
 if (typeof window !== 'undefined') {
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  const handler = () => {
     const store = useThemeStore.getState();
     if (store.theme === 'system') {
       applyTheme('system');
     }
-  });
+  };
+  mediaQuery.addEventListener('change', handler);
+
+  // Clean up on HMR to prevent listener accumulation
+  if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+      mediaQuery.removeEventListener('change', handler);
+    });
+  }
 }

@@ -5,12 +5,13 @@ import {
   addDoc,
   setDoc,
   arrayUnion,
-  arrayRemove,
+
   serverTimestamp,
   increment,
   collection,
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, functions } from './firebase';
+import { httpsCallable } from 'firebase/functions';
 import { locationRef, gameRef, userRef } from './firestore';
 import { generateCouponNumbers, createEmptyMarkedGrid } from '@/utils/couponGenerator';
 import { VALID_STATUS_TRANSITIONS } from '@/utils/constants';
@@ -48,9 +49,10 @@ export async function purchaseCoupon(
   const numbers = generateCouponNumbers();
   const markedCells = createEmptyMarkedGrid();
 
-  // Pre-generate document refs so IDs are known before commit
-  const couponRef = doc(collection(db, 'locations', locationId, 'games', gameId, 'coupons'));
-  const commitmentRef = doc(collection(db, 'commitments'));
+  // Deterministic coupon ID prevents duplicate purchases on retry/double-click
+  const timestamp = Date.now();
+  const couponRef = doc(db, 'locations', locationId, 'games', gameId, 'coupons', `${userId}_${timestamp}`);
+  const commitmentRef = doc(db, 'commitments', `${userId}_${gameId}_${timestamp}`);
 
   // Create coupon document with commitment ID set directly
   batch.set(couponRef, {
@@ -396,28 +398,24 @@ export async function updateLocationSettings(
   await updateDoc(locationRef(locationId), updates);
 }
 
-// ─── Admin management ──────────────────────────────────────
+// ─── Admin management (via Cloud Function) ─────────────────
+
+const manageAdmin = httpsCallable<
+  { action: 'add' | 'remove'; locationId: string; targetUid: string },
+  { success: boolean }
+>(functions, 'manageLocationAdmin');
 
 export async function addLocationAdmin(
   locationId: string,
   uid: string
 ): Promise<void> {
-  await updateDoc(locationRef(locationId), {
-    adminUids: arrayUnion(uid),
-    updatedAt: serverTimestamp(),
-  });
+  await manageAdmin({ action: 'add', locationId, targetUid: uid });
 }
 
 export async function removeLocationAdmin(
   locationId: string,
   uid: string,
-  creatorUid: string
+  _creatorUid: string
 ): Promise<void> {
-  if (uid === creatorUid) {
-    throw new Error('Kan ikke fjerne oppretter av lokasjonen');
-  }
-  await updateDoc(locationRef(locationId), {
-    adminUids: arrayRemove(uid),
-    updatedAt: serverTimestamp(),
-  });
+  await manageAdmin({ action: 'remove', locationId, targetUid: uid });
 }

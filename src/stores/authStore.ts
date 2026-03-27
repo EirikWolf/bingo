@@ -12,6 +12,9 @@ interface AuthState {
   initialize: () => () => void;
 }
 
+let _initialized = false;
+let _cleanup: (() => void) | null = null;
+
 export const useAuthStore = create<AuthState>((set) => ({
   firebaseUser: null,
   user: null,
@@ -19,6 +22,12 @@ export const useAuthStore = create<AuthState>((set) => ({
   error: null,
 
   initialize: () => {
+    // Prevent double initialization (e.g. StrictMode or multiple mount)
+    if (_initialized && _cleanup) {
+      return _cleanup;
+    }
+    _initialized = true;
+
     let unsubUser: (() => void) | null = null;
     let currentUid: string | null = null;
 
@@ -63,9 +72,12 @@ export const useAuthStore = create<AuthState>((set) => ({
     });
 
     // Return cleanup function
-    return () => {
+    _cleanup = () => {
+      _initialized = false;
+      _cleanup = null;
       unsubAuth();
       if (unsubUser) unsubUser();
     };
+    return _cleanup;
   },
 }));

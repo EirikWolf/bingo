@@ -6,6 +6,7 @@ import {
   onDocumentUpdated,
   onDocumentWritten,
 } from 'firebase-functions/v2/firestore';
+import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { setGlobalOptions } from 'firebase-functions/v2';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { logger } from 'firebase-functions/v2';
@@ -41,8 +42,9 @@ export const onBingoClaimCreated = onDocumentCreated(
       if (!couponSnap.exists) {
         logger.warn('Claim references non-existent coupon', { claimId: event.params.claimId });
         await snap.ref.update({
-          serverValidated: true,
+          serverValidated: false,
           serverValidatedCondition: null,
+          serverValidationError: 'coupon_not_found',
         });
         return;
       }
@@ -51,8 +53,9 @@ export const onBingoClaimCreated = onDocumentCreated(
       const gameSnap = await db.doc(`locations/${locationId}/games/${gameId}`).get();
       if (!gameSnap.exists) {
         await snap.ref.update({
-          serverValidated: true,
+          serverValidated: false,
           serverValidatedCondition: null,
+          serverValidationError: 'game_not_found',
         });
         return;
       }
@@ -81,8 +84,9 @@ export const onBingoClaimCreated = onDocumentCreated(
     } catch (error) {
       logger.error('Error validating claim', error);
       await snap.ref.update({
-        serverValidated: true,
+        serverValidated: false,
         serverValidatedCondition: null,
+        serverValidationError: 'validation_error',
       });
     }
   }
@@ -100,6 +104,23 @@ async function getTokensForLocation(locationId: string): Promise<string[]> {
     .get();
 
   return tokensSnap.docs.map((d) => d.data().token as string);
+}
+
+/**
+ * Helper: Get FCM tokens for specific user UIDs (batched to avoid N+1).
+ */
+async function getTokensForUsers(uids: string[]): Promise<string[]> {
+  if (uids.length === 0) return [];
+  const tokens: string[] = [];
+  // Firestore 'in' query supports max 10 items
+  for (let i = 0; i < uids.length; i += 10) {
+    const chunk = uids.slice(i, i + 10);
+    const snap = await db.collectionGroup('fcmTokens')
+      .where('userId', 'in', chunk)
+      .get();
+    snap.docs.forEach((d) => tokens.push(d.data().token as string));
+  }
+  return tokens;
 }
 
 /**
@@ -142,14 +163,17 @@ async function sendToTokens(
         }
       });
 
-      // Delete stale tokens from Firestore
+      // Delete stale tokens from Firestore (in-query limited to 10 items)
       if (staleTokens.length > 0) {
-        const staleSet = new Set(staleTokens);
-        const allTokenDocs = await db.collectionGroup('fcmTokens')
-          .where('token', 'in', [...staleSet])
-          .get();
+        const staleArray = [...new Set(staleTokens)];
         const deleteBatch = db.batch();
-        allTokenDocs.docs.forEach((d) => deleteBatch.delete(d.ref));
+        for (let j = 0; j < staleArray.length; j += 10) {
+          const chunk = staleArray.slice(j, j + 10);
+          const tokenDocs = await db.collectionGroup('fcmTokens')
+            .where('token', 'in', chunk)
+            .get();
+          tokenDocs.docs.forEach((d) => deleteBatch.delete(d.ref));
+        }
         await deleteBatch.commit();
         logger.info(`Cleaned up ${staleTokens.length} stale FCM tokens`);
       }
@@ -235,12 +259,8 @@ export const onBingoClaimNotify = onDocumentCreated(
     const adminUids: string[] = locationSnap.data()?.adminUids ?? [];
     const locationName = locationSnap.data()?.name ?? 'Bingo';
 
-    // Get admin FCM tokens
-    const tokens: string[] = [];
-    for (const uid of adminUids) {
-      const tokenSnap = await db.collection(`users/${uid}/fcmTokens`).get();
-      tokenSnap.docs.forEach((d) => tokens.push(d.data().token));
-    }
+    // Get admin FCM tokens (batched)
+    const tokens = await getTokensForUsers(adminUids);
 
     await sendToTokens(
       tokens,
@@ -442,33 +462,37 @@ export const onGameFinishedUpdateLeaderboard = onDocumentUpdated(
         playerNames.set(coupon.userId, coupon.userDisplayName);
       }
 
-      // Batch update gamesPlayed for each participant
-      const batch = db.batch();
-      for (const userId of playerIds) {
-        const leaderboardRef = db.doc(
-          `locations/${locationId}/leaderboard/${userId}`
-        );
+      // Batch update gamesPlayed for each participant (max 500 per batch)
+      const playerArray = [...playerIds];
+      const BATCH_LIMIT = 400; // Leave headroom under 500 limit
+      for (let batchStart = 0; batchStart < playerArray.length; batchStart += BATCH_LIMIT) {
+        const batchChunk = playerArray.slice(batchStart, batchStart + BATCH_LIMIT);
+        const batch = db.batch();
+        for (const userId of batchChunk) {
+          const leaderboardRef = db.doc(
+            `locations/${locationId}/leaderboard/${userId}`
+          );
 
-        const existing = await leaderboardRef.get();
-        if (existing.exists) {
-          batch.update(leaderboardRef, {
-            gamesPlayed: FieldValue.increment(1),
-            displayName: playerNames.get(userId) ?? 'Ukjent',
-            updatedAt: FieldValue.serverTimestamp(),
-          });
-        } else {
-          batch.set(leaderboardRef, {
-            userId,
-            displayName: playerNames.get(userId) ?? 'Ukjent',
-            wins: 0,
-            gamesPlayed: 1,
-            lastWinAt: null,
-            updatedAt: FieldValue.serverTimestamp(),
-          });
+          const existing = await leaderboardRef.get();
+          if (existing.exists) {
+            batch.update(leaderboardRef, {
+              gamesPlayed: FieldValue.increment(1),
+              displayName: playerNames.get(userId) ?? 'Ukjent',
+              updatedAt: FieldValue.serverTimestamp(),
+            });
+          } else {
+            batch.set(leaderboardRef, {
+              userId,
+              displayName: playerNames.get(userId) ?? 'Ukjent',
+              wins: 0,
+              gamesPlayed: 1,
+              lastWinAt: null,
+              updatedAt: FieldValue.serverTimestamp(),
+            });
+          }
         }
+        await batch.commit();
       }
-
-      await batch.commit();
 
       logger.info('Updated gamesPlayed for participants', {
         locationId,
@@ -603,16 +627,12 @@ export const onCouponCheatCheck = onDocumentCreated(
         flaggedAt: FieldValue.serverTimestamp(),
       });
 
-      // Notify admins
+      // Notify admins (batched token lookup)
       const locationSnap = await db.doc(`locations/${locationId}`).get();
       const adminUids: string[] = locationSnap.data()?.adminUids ?? [];
       const locationName = locationSnap.data()?.name ?? 'Bingo';
 
-      const tokens: string[] = [];
-      for (const uid of adminUids) {
-        const tokenSnap = await db.collection(`users/${uid}/fcmTokens`).get();
-        tokenSnap.docs.forEach((d) => tokens.push(d.data().token));
-      }
+      const tokens = await getTokensForUsers(adminUids);
 
       await sendToTokens(
         tokens,
@@ -706,11 +726,7 @@ export const onCouponRateLimit = onDocumentCreated(
       const adminUids: string[] = locationSnap.data()?.adminUids ?? [];
       const locationName = locationSnap.data()?.name ?? 'Bingo';
 
-      const tokens: string[] = [];
-      for (const uid of adminUids) {
-        const tokenSnap = await db.collection(`users/${uid}/fcmTokens`).get();
-        tokenSnap.docs.forEach((d) => tokens.push(d.data().token));
-      }
+      const tokens = await getTokensForUsers(adminUids);
 
       await sendToTokens(
         tokens,
@@ -1096,11 +1112,27 @@ export const onGameStartedNotify = onDocumentUpdated(
       userCouponCount.set(userId, (userCouponCount.get(userId) ?? 0) + 1);
     }
 
-    // Send personalized notification to each player
-    for (const [userId, count] of userCouponCount) {
-      const tokenSnap = await db.collection(`users/${userId}/fcmTokens`).get();
-      const tokens = tokenSnap.docs.map((d) => d.data().token as string);
+    // Batch-fetch all player tokens, then send personalized notifications
+    const allUserIds = [...userCouponCount.keys()];
+    const allTokens = new Map<string, string[]>();
 
+    // Fetch tokens in batches of 10
+    for (let ti = 0; ti < allUserIds.length; ti += 10) {
+      const chunk = allUserIds.slice(ti, ti + 10);
+      const snap = await db.collectionGroup('fcmTokens')
+        .where('userId', 'in', chunk)
+        .get();
+      for (const tokenDoc of snap.docs) {
+        const data = tokenDoc.data();
+        const uid = data.userId as string;
+        const existing = allTokens.get(uid) ?? [];
+        existing.push(data.token as string);
+        allTokens.set(uid, existing);
+      }
+    }
+
+    for (const [userId, count] of userCouponCount) {
+      const tokens = allTokens.get(userId) ?? [];
       if (tokens.length > 0) {
         const plural = count === 1 ? 'kupong' : 'kuponger';
         await sendToTokens(
@@ -1191,3 +1223,82 @@ export const unmarkedNumbersReminder = onSchedule(
     }
   }
 );
+
+// ─── Admin management (callable) ────────────────────────
+// Location admins can add/remove other admins via this Cloud Function,
+// since Firestore rules no longer allow direct adminUids modification.
+
+export const manageLocationAdmin = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Må være innlogget');
+  }
+
+  const { action, locationId, targetUid } = request.data as {
+    action: 'add' | 'remove';
+    locationId: string;
+    targetUid: string;
+  };
+
+  if (!action || !locationId || !targetUid) {
+    throw new HttpsError('invalid-argument', 'Mangler påkrevde felt');
+  }
+
+  const callerUid = request.auth.uid;
+
+  // Verify caller is admin of this location
+  const locationSnap = await db.doc(`locations/${locationId}`).get();
+  if (!locationSnap.exists) {
+    throw new HttpsError('not-found', 'Lokasjon ikke funnet');
+  }
+
+  const locationData = locationSnap.data()!;
+  const adminUids: string[] = locationData.adminUids ?? [];
+
+  // Check caller is superadmin or location admin
+  const callerDoc = await db.doc(`users/${callerUid}`).get();
+  const callerRole = callerDoc.data()?.role;
+  const isCallerAdmin = adminUids.includes(callerUid) || callerRole === 'superadmin';
+
+  if (!isCallerAdmin) {
+    throw new HttpsError('permission-denied', 'Kun administratorer kan endre administratorer');
+  }
+
+  if (action === 'add') {
+    // Verify target user exists
+    const targetDoc = await db.doc(`users/${targetUid}`).get();
+    if (!targetDoc.exists) {
+      throw new HttpsError('not-found', 'Bruker ikke funnet');
+    }
+    if (adminUids.includes(targetUid)) {
+      throw new HttpsError('already-exists', 'Brukeren er allerede administrator');
+    }
+
+    await locationSnap.ref.update({
+      adminUids: FieldValue.arrayUnion(targetUid),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    logger.info('Admin added', { locationId, targetUid, addedBy: callerUid });
+    return { success: true };
+
+  } else if (action === 'remove') {
+    const creatorUid = adminUids[0];
+    if (targetUid === creatorUid) {
+      throw new HttpsError('failed-precondition', 'Kan ikke fjerne oppretter av lokasjonen');
+    }
+    if (adminUids.length <= 1) {
+      throw new HttpsError('failed-precondition', 'Kan ikke fjerne siste administrator');
+    }
+
+    await locationSnap.ref.update({
+      adminUids: FieldValue.arrayRemove(targetUid),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    logger.info('Admin removed', { locationId, targetUid, removedBy: callerUid });
+    return { success: true };
+
+  } else {
+    throw new HttpsError('invalid-argument', 'Ugyldig handling');
+  }
+});

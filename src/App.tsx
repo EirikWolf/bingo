@@ -5,6 +5,7 @@ import { useAutoDraw } from '@/hooks/useAutoDraw';
 import '@/stores/themeStore'; // Initialize theme on app start (applies dark class to <html>)
 import { Spinner } from '@/components/ui/Spinner';
 import { InstallPrompt } from '@/components/ui/InstallPrompt';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 // Lazy-loaded pages for code splitting
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -41,7 +42,7 @@ export default function App() {
   // BigScreen is always accessible (no login required)
   // Everything else requires authentication
   return (
-    <>
+    <ErrorBoundary>
       <Suspense fallback={<PageSpinner />}>
         <Routes>
           <Route path="/skjerm/:locationId" element={<BigScreenPage />} />
@@ -65,6 +66,6 @@ export default function App() {
         </Routes>
       </Suspense>
       <InstallPrompt />
-    </>
+    </ErrorBoundary>
   );
 }

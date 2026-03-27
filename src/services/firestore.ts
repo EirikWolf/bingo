@@ -4,10 +4,14 @@ import {
   query,
   where,
   orderBy,
+  limit,
   onSnapshot,
   getDoc,
+  getDocs,
+  startAfter,
   type DocumentReference,
   type CollectionReference,
+  type DocumentSnapshot,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import type { Location, Game, Coupon, BingoClaim, Commitment, User, LocationStats, LeaderboardEntry } from '@/types';
@@ -217,18 +221,19 @@ export function listenToFinishedGames(
   });
 }
 
-/** Listen to all users (superadmin use) */
-export function listenToAllUsers(
-  callback: (users: User[]) => void
-): () => void {
-  const q = query(collection(db, 'users'), orderBy('displayName'));
-  return onSnapshot(q, (snap) => {
-    const users = snap.docs.map((d) => ({ ...d.data(), uid: d.id }) as User);
-    callback(users);
-  }, (error) => {
-    console.error('listenToAllUsers error:', error);
-    callback([]);
-  });
+/** Fetch users with pagination (superadmin use) */
+export async function fetchAllUsersPaginated(
+  pageSize: number = 100,
+  lastDoc?: DocumentSnapshot
+): Promise<{ users: User[]; lastDoc: DocumentSnapshot | null }> {
+  let q = query(collection(db, 'users'), orderBy('displayName'), limit(pageSize));
+  if (lastDoc) {
+    q = query(collection(db, 'users'), orderBy('displayName'), startAfter(lastDoc), limit(pageSize));
+  }
+  const snap = await getDocs(q);
+  const users = snap.docs.map((d) => ({ ...d.data(), uid: d.id }) as User);
+  const last = snap.docs.length > 0 ? snap.docs[snap.docs.length - 1]! : null;
+  return { users, lastDoc: last };
 }
 
 // ─── Fetch users by UIDs ─────────────────────────────────

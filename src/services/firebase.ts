@@ -8,6 +8,7 @@ import {
   getFirestore,
 } from 'firebase/firestore';
 import { getStorage, connectStorageEmulator } from 'firebase/storage';
+import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -41,11 +42,14 @@ export const db = createFirestore();
 
 export const storage = getStorage(app);
 
+export const functions = getFunctions(app, 'us-central1');
+
 // Koble til emulatorer i utvikling
 if (useEmulators) {
   connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
   connectFirestoreEmulator(db, 'localhost', 8080);
   connectStorageEmulator(storage, 'localhost', 9199);
+  connectFunctionsEmulator(functions, 'localhost', 5001);
 }
 
 export default app;

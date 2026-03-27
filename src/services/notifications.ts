@@ -95,10 +95,12 @@ export async function requestNotificationPermission(
     }
 
     // Store token in Firestore under the user's fcmTokens subcollection
+    // userId field is required for Cloud Functions batch queries via collectionGroup
     await setDoc(
       doc(db, 'users', userId, 'fcmTokens', token),
       {
         token,
+        userId,
         locationId: locationId ?? null,
         platform: 'web',
         createdAt: serverTimestamp(),

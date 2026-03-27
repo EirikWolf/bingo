@@ -1,22 +1,14 @@
-import { initializeApp } from 'firebase-admin/app';
-import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
-import { getMessaging } from 'firebase-admin/messaging';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import {
   onDocumentCreated,
   onDocumentUpdated,
-  onDocumentWritten,
 } from 'firebase-functions/v2/firestore';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
-import { setGlobalOptions } from 'firebase-functions/v2';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { logger } from 'firebase-functions/v2';
 import { findWinCondition } from './bingoValidator';
-
-// Runtime: Node.js 22 (configured in firebase.json)
-setGlobalOptions({ region: 'us-central1' });
-
-initializeApp();
-const db = getFirestore();
+import { db } from './helpers/firebase';
+import { getTokensForLocation, getTokensForUsers, sendToTokens } from './helpers/fcm';
 
 // ─── Server-side bingo claim validation ──────────────────
 
@@ -25,7 +17,7 @@ const db = getFirestore();
  * Sets serverValidated: true and serverValidatedCondition on the claim.
  */
 export const onBingoClaimCreated = onDocumentCreated(
-  'locations/{locationId}/games/{gameId}/bingo_claims/{claimId}',
+  { document: 'locations/{locationId}/games/{gameId}/bingo_claims/{claimId}', retry: true },
   async (event) => {
     const snap = event.data;
     if (!snap) return;
@@ -93,95 +85,6 @@ export const onBingoClaimCreated = onDocumentCreated(
 );
 
 // ─── Push notifications ──────────────────────────────────
-
-/**
- * Helper: Get all FCM tokens for users at a specific location.
- */
-async function getTokensForLocation(locationId: string): Promise<string[]> {
-  const tokensSnap = await db
-    .collectionGroup('fcmTokens')
-    .where('locationId', '==', locationId)
-    .get();
-
-  return tokensSnap.docs.map((d) => d.data().token as string);
-}
-
-/**
- * Helper: Get FCM tokens for specific user UIDs (batched to avoid N+1).
- */
-async function getTokensForUsers(uids: string[]): Promise<string[]> {
-  if (uids.length === 0) return [];
-  const tokens: string[] = [];
-  // Firestore 'in' query supports max 10 items
-  for (let i = 0; i < uids.length; i += 10) {
-    const chunk = uids.slice(i, i + 10);
-    const snap = await db.collectionGroup('fcmTokens')
-      .where('userId', 'in', chunk)
-      .get();
-    snap.docs.forEach((d) => tokens.push(d.data().token as string));
-  }
-  return tokens;
-}
-
-/**
- * Helper: Send FCM to multiple tokens, cleaning up stale ones.
- */
-async function sendToTokens(
-  tokens: string[],
-  title: string,
-  body: string,
-  link?: string
-): Promise<void> {
-  if (tokens.length === 0) return;
-
-  const messaging = getMessaging();
-
-  // FCM supports max 500 tokens per multicast
-  const BATCH_SIZE = 500;
-  for (let i = 0; i < tokens.length; i += BATCH_SIZE) {
-    const batch = tokens.slice(i, i + BATCH_SIZE);
-
-    const response = await messaging.sendEachForMulticast({
-      tokens: batch,
-      notification: { title, body },
-      webpush: {
-        fcmOptions: { link: link ?? '/' },
-        notification: {
-          icon: '/icons/icon-192.png',
-          badge: '/icons/icon-72.png',
-        },
-      },
-    });
-
-    // Clean up stale tokens
-    if (response.failureCount > 0) {
-      const staleTokens: string[] = [];
-      response.responses.forEach((resp, idx) => {
-        if (resp.error?.code === 'messaging/registration-token-not-registered' ||
-            resp.error?.code === 'messaging/invalid-registration-token') {
-          staleTokens.push(batch[idx]!);
-        }
-      });
-
-      // Delete stale tokens from Firestore (in-query limited to 10 items)
-      if (staleTokens.length > 0) {
-        const staleArray = [...new Set(staleTokens)];
-        const deleteBatch = db.batch();
-        for (let j = 0; j < staleArray.length; j += 10) {
-          const chunk = staleArray.slice(j, j + 10);
-          const tokenDocs = await db.collectionGroup('fcmTokens')
-            .where('token', 'in', chunk)
-            .get();
-          tokenDocs.docs.forEach((d) => deleteBatch.delete(d.ref));
-        }
-        await deleteBatch.commit();
-        logger.info(`Cleaned up ${staleTokens.length} stale FCM tokens`);
-      }
-    }
-
-    logger.info(`Sent ${response.successCount}/${batch.length} notifications`);
-  }
-}
 
 /**
  * When game status changes to 'open', notify all users at the location.
@@ -312,7 +215,7 @@ export const onPaymentConfirmed = onDocumentUpdated(
  * Also updates when game opens (to count total games).
  */
 export const onGameStatsUpdate = onDocumentUpdated(
-  'locations/{locationId}/games/{gameId}',
+  { document: 'locations/{locationId}/games/{gameId}', retry: true },
   async (event) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
@@ -324,44 +227,28 @@ export const onGameStatsUpdate = onDocumentUpdated(
     if (before.status === after.status || after.status !== 'finished') return;
 
     try {
-      // Query all finished games for this location
-      const gamesSnap = await db
-        .collection(`locations/${locationId}/games`)
-        .where('status', '==', 'finished')
-        .get();
-
-      let totalCoupons = 0;
-      let totalWinners = 0;
-      let totalPlayers = 0;
-      let lastGameAt: FirebaseFirestore.Timestamp | null = null;
-
-      for (const gameDoc of gamesSnap.docs) {
-        const game = gameDoc.data();
-        totalCoupons += game.couponCount ?? 0;
-        totalWinners += game.winners?.length ?? 0;
-        totalPlayers += game.playerCount ?? 0;
-
-        const finishedAt = game.finishedAt as FirebaseFirestore.Timestamp | null;
-        if (finishedAt && (!lastGameAt || finishedAt.toMillis() > lastGameAt.toMillis())) {
-          lastGameAt = finishedAt;
-        }
-      }
-
-      const totalGames = gamesSnap.size;
       const statsRef = db.doc(`locations/${locationId}/meta/stats`);
 
-      await statsRef.set({
-        totalGames,
-        totalCoupons,
-        totalWinners,
-        totalPlayers,
-        averagePlayersPerGame: totalGames > 0 ? Math.round(totalPlayers / totalGames) : 0,
-        averageCouponsPerGame: totalGames > 0 ? Math.round(totalCoupons / totalGames) : 0,
-        lastGameAt,
-        updatedAt: FieldValue.serverTimestamp(),
-      });
+      // Incremental update — only add this game's contribution
+      const gameCoupons = after.couponCount ?? 0;
+      const gameWinners = (after.winners ?? []).length;
+      const gamePlayers = after.playerCount ?? 0;
 
-      logger.info('Updated location stats', { locationId, totalGames, totalCoupons });
+      await statsRef.set({
+        totalGames: FieldValue.increment(1),
+        totalCoupons: FieldValue.increment(gameCoupons),
+        totalWinners: FieldValue.increment(gameWinners),
+        totalPlayers: FieldValue.increment(gamePlayers),
+        lastGameAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+      logger.info('Updated location stats (incremental)', {
+        locationId,
+        gameCoupons,
+        gameWinners,
+        gamePlayers,
+      });
     } catch (error) {
       logger.error('Failed to update location stats', { locationId, error });
     }
@@ -375,7 +262,7 @@ export const onGameStatsUpdate = onDocumentUpdated(
  * for the location. Also increments gamesPlayed for all coupon owners.
  */
 export const onWinnerLeaderboardUpdate = onDocumentUpdated(
-  'locations/{locationId}/games/{gameId}',
+  { document: 'locations/{locationId}/games/{gameId}', retry: true },
   async (event) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
@@ -437,7 +324,7 @@ export const onWinnerLeaderboardUpdate = onDocumentUpdated(
  * When a game finishes, increment gamesPlayed for all participants.
  */
 export const onGameFinishedUpdateLeaderboard = onDocumentUpdated(
-  'locations/{locationId}/games/{gameId}',
+  { document: 'locations/{locationId}/games/{gameId}', retry: true },
   async (event) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
@@ -510,7 +397,7 @@ export const onGameFinishedUpdateLeaderboard = onDocumentUpdated(
 // automatically approve it without admin intervention.
 
 export const onClaimServerValidated = onDocumentUpdated(
-  'locations/{locationId}/games/{gameId}/bingo_claims/{claimId}',
+  { document: 'locations/{locationId}/games/{gameId}/bingo_claims/{claimId}', retry: true },
   async (event) => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
@@ -525,33 +412,64 @@ export const onClaimServerValidated = onDocumentUpdated(
     const { locationId, gameId, claimId } = event.params;
 
     try {
+      // Re-validate against current game state before approving
+      const [gameSnap, couponSnap] = await Promise.all([
+        db.doc(`locations/${locationId}/games/${gameId}`).get(),
+        db.doc(`locations/${locationId}/games/${gameId}/coupons/${after.couponId}`).get(),
+      ]);
+
+      if (!gameSnap.exists || !couponSnap.exists) {
+        logger.warn('Cannot auto-approve: game or coupon missing', { claimId });
+        return;
+      }
+
+      const game = gameSnap.data()!;
+      const coupon = couponSnap.data()!;
+
+      // Re-validate with current drawn numbers
+      const drawnSet = new Set<number>(game.drawnNumbers ?? []);
+      const revalidatedCondition = findWinCondition(
+        coupon.numbers,
+        drawnSet,
+        game.winConditions ?? []
+      );
+
+      if (!revalidatedCondition) {
+        logger.warn('Re-validation failed — claim no longer valid', {
+          claimId,
+          originalCondition: after.serverValidatedCondition,
+        });
+        await event.data!.after.ref.update({
+          status: 'rejected',
+          reviewedBy: 'system-revalidation',
+          reviewedAt: FieldValue.serverTimestamp(),
+        });
+        return;
+      }
+
       const batch = db.batch();
 
       // Approve the claim
       batch.update(event.data!.after.ref, {
         status: 'approved',
-        approvedWinCondition: after.serverValidatedCondition,
+        approvedWinCondition: revalidatedCondition,
         reviewedBy: 'system-auto',
         reviewedAt: FieldValue.serverTimestamp(),
       });
 
       // Mark coupon as winner
-      const couponRef = db.doc(
-        `locations/${locationId}/games/${gameId}/coupons/${after.couponId}`
-      );
-      batch.update(couponRef, {
+      batch.update(couponSnap.ref, {
         isWinner: true,
-        winCondition: after.serverValidatedCondition,
+        winCondition: revalidatedCondition,
       });
 
       // Add winner to game
-      const gameRef = db.doc(`locations/${locationId}/games/${gameId}`);
-      batch.update(gameRef, {
+      batch.update(gameSnap.ref, {
         winners: FieldValue.arrayUnion({
           userId: after.userId,
           displayName: after.userDisplayName,
           couponId: after.couponId,
-          winCondition: after.serverValidatedCondition,
+          winCondition: revalidatedCondition,
         }),
       });
 
@@ -560,7 +478,7 @@ export const onClaimServerValidated = onDocumentUpdated(
       logger.info('Auto-approved valid bingo claim', {
         claimId,
         userId: after.userId,
-        condition: after.serverValidatedCondition,
+        condition: revalidatedCondition,
       });
     } catch (error) {
       logger.error('Failed to auto-approve claim', { claimId, error });
@@ -937,14 +855,17 @@ export const autoDrawScheduler = onSchedule(
       // Only process active games with auto-draw enabled
       if (game.status !== 'active' || !game.autoDrawActive) continue;
 
-      // Check if enough time has elapsed since last draw
+      // Server-side is a FALLBACK only — client-side useAutoDraw is authoritative.
+      // Only draw if no draw has happened for at least 3x the configured interval,
+      // which means the client-side hook is likely not running.
       const intervalMs = game.autoDrawIntervalMs ?? 5000;
+      const fallbackThreshold = Math.max(intervalMs * 3, 30000); // At least 30s
       const lastDraw = game.lastDrawAt as Timestamp | null;
       const now = Date.now();
 
       if (lastDraw) {
         const elapsed = now - lastDraw.toMillis();
-        if (elapsed < intervalMs) continue;
+        if (elapsed < fallbackThreshold) continue;
       }
 
       // Pick a random undrawn number
@@ -1186,12 +1107,13 @@ export const unmarkedNumbersReminder = onSchedule(
         .collection(`locations/${locDoc.id}/games/${loc.activeGameId}/coupons`)
         .get();
 
+      // Collect users who need notification
+      const usersToNotify = new Map<string, number>(); // userId -> max unmarked count
       for (const couponDoc of couponsSnap.docs) {
         const coupon = couponDoc.data();
         const numbers = coupon.numbers as number[];
         const marked = coupon.markedCells as boolean[];
 
-        // Count how many drawn numbers are NOT marked on this coupon
         let unmarkedCount = 0;
         for (let i = 0; i < numbers.length; i++) {
           if (numbers[i] !== 0 && drawnSet.has(numbers[i]!) && !marked[i]) {
@@ -1199,21 +1121,42 @@ export const unmarkedNumbersReminder = onSchedule(
           }
         }
 
-        // Only notify if 3+ unmarked matches (significant gap)
         if (unmarkedCount >= 3) {
           const userId = coupon.userId as string;
-          const tokenSnap = await db.collection(`users/${userId}/fcmTokens`).get();
-          const tokens = tokenSnap.docs.map((d) => d.data().token as string);
+          const prev = usersToNotify.get(userId) ?? 0;
+          usersToNotify.set(userId, Math.max(prev, unmarkedCount));
+        }
+      }
 
-          if (tokens.length > 0) {
-            await sendToTokens(
-              tokens,
-              'Sjekk kupongene dine!',
-              `Du har ${unmarkedCount} umarkerte treff. Åpne appen og marker dem!`,
-              `/spill/${locDoc.id}`
-            );
-            notifiedCount++;
-          }
+      if (usersToNotify.size === 0) continue;
+
+      // Batch-fetch tokens for all affected users
+      const userIds = [...usersToNotify.keys()];
+      const tokenMap = new Map<string, string[]>();
+      for (let ti = 0; ti < userIds.length; ti += 10) {
+        const chunk = userIds.slice(ti, ti + 10);
+        const snap = await db.collectionGroup('fcmTokens')
+          .where('userId', 'in', chunk)
+          .get();
+        for (const tokenDoc of snap.docs) {
+          const data = tokenDoc.data();
+          const uid = data.userId as string;
+          const existing = tokenMap.get(uid) ?? [];
+          existing.push(data.token as string);
+          tokenMap.set(uid, existing);
+        }
+      }
+
+      for (const [userId, unmarkedCount] of usersToNotify) {
+        const tokens = tokenMap.get(userId) ?? [];
+        if (tokens.length > 0) {
+          await sendToTokens(
+            tokens,
+            'Sjekk kupongene dine!',
+            `Du har ${unmarkedCount} umarkerte treff. Åpne appen og marker dem!`,
+            `/spill/${locDoc.id}`
+          );
+          notifiedCount++;
         }
       }
     }

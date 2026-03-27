@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLocationStore } from '@/stores/locationStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -101,7 +101,7 @@ interface LocationCardProps {
   onAdmin: () => void;
 }
 
-function LocationCard({ location, isAdmin, onSelect, onAdmin }: LocationCardProps) {
+const LocationCard = memo(function LocationCard({ location, isAdmin, onSelect, onAdmin }: LocationCardProps) {
   const hasActiveGame = location.activeGameId !== null;
 
   return (
@@ -154,4 +154,4 @@ function LocationCard({ location, isAdmin, onSelect, onAdmin }: LocationCardProp
       </div>
     </Card>
   );
-}
+});

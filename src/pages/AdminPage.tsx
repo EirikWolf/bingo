@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import { Fragment, useEffect, useMemo, useState, useCallback, useRef, lazy, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/stores/authStore';
@@ -15,13 +15,15 @@ import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
 import { Modal } from '@/components/ui/Modal';
 import { NumberBall } from '@/components/bingo/NumberBall';
-import { CommitmentsTable } from '@/components/admin/CommitmentsTable';
-import { SettingsPanel } from '@/components/admin/SettingsPanel';
-import { PlayerOverview } from '@/components/admin/PlayerOverview';
 import { QrCodeSection } from '@/components/admin/QrCodeSection';
-import { LocationStatsCard } from '@/components/admin/LocationStatsCard';
-import { Leaderboard } from '@/components/admin/Leaderboard';
 import type { Location, Game, BingoClaim, Coupon, GameStatus, WinCondition } from '@/types';
+
+// Lazy-load heavy tab components
+const CommitmentsTable = lazy(() => import('@/components/admin/CommitmentsTable').then(m => ({ default: m.CommitmentsTable })));
+const SettingsPanel = lazy(() => import('@/components/admin/SettingsPanel').then(m => ({ default: m.SettingsPanel })));
+const PlayerOverview = lazy(() => import('@/components/admin/PlayerOverview').then(m => ({ default: m.PlayerOverview })));
+const LocationStatsCard = lazy(() => import('@/components/admin/LocationStatsCard').then(m => ({ default: m.LocationStatsCard })));
+const Leaderboard = lazy(() => import('@/components/admin/Leaderboard').then(m => ({ default: m.Leaderboard })));
 
 type AdminTab = 'spill' | 'forpliktelser' | 'spillere' | 'statistikk' | 'innstillinger';
 
@@ -405,36 +407,39 @@ export default function AdminPage() {
       </div>
 
       <main className="mx-auto max-w-2xl px-4 pt-4 space-y-4">
-        {/* Commitments tab */}
-        {activeTab === 'forpliktelser' && locationId && user && (
-          <CommitmentsTable
-            locationId={locationId}
-            adminUid={user.uid}
-            locationName={location.name}
-            vippsNumber={location.settings.vippsNumber}
-            vippsDefaultAmount={location.settings.vippsDefaultAmount}
-          />
-        )}
+        {/* Lazy-loaded tabs */}
+        <Suspense fallback={<div className="flex justify-center py-8"><Spinner size="lg" /></div>}>
+          {/* Commitments tab */}
+          {activeTab === 'forpliktelser' && locationId && user && (
+            <CommitmentsTable
+              locationId={locationId}
+              adminUid={user.uid}
+              locationName={location.name}
+              vippsNumber={location.settings.vippsNumber}
+              vippsDefaultAmount={location.settings.vippsDefaultAmount}
+            />
+          )}
 
-        {/* Players tab */}
-        {activeTab === 'spillere' && locationId && (
-          <PlayerOverview locationId={locationId} />
-        )}
+          {/* Players tab */}
+          {activeTab === 'spillere' && locationId && (
+            <PlayerOverview locationId={locationId} />
+          )}
 
-        {/* Statistics tab */}
-        {activeTab === 'statistikk' && locationId && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-gray-900">Lokasjonsstatistikk</h2>
-            <LocationStatsCard locationId={locationId} />
-            <h2 className="text-lg font-semibold text-gray-900 mt-6">Toppliste</h2>
-            <Leaderboard locationId={locationId} />
-          </div>
-        )}
+          {/* Statistics tab */}
+          {activeTab === 'statistikk' && locationId && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold text-gray-900">Lokasjonsstatistikk</h2>
+              <LocationStatsCard locationId={locationId} />
+              <h2 className="text-lg font-semibold text-gray-900 mt-6">Toppliste</h2>
+              <Leaderboard locationId={locationId} />
+            </div>
+          )}
 
-        {/* Settings tab */}
-        {activeTab === 'innstillinger' && locationId && (
-          <SettingsPanel location={location} locationId={locationId} currentUserId={user?.uid ?? ''} />
-        )}
+          {/* Settings tab */}
+          {activeTab === 'innstillinger' && locationId && (
+            <SettingsPanel location={location} locationId={locationId} currentUserId={user?.uid ?? ''} />
+          )}
+        </Suspense>
 
         {/* Game tab */}
         {activeTab === 'spill' && (

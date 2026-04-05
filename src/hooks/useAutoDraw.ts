@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { listenToLocation, listenToGame } from '@/services/firestore';
 import { drawNumber } from '@/services/actions';
@@ -8,7 +8,9 @@ import type { Location, Game } from '@/types';
 /**
  * Global auto-draw hook that runs in App.tsx.
  * Handles automatic number drawing for admins regardless of which page they are on.
- * This replaces the per-page auto-draw loops that broke when admins navigated between pages.
+ *
+ * Uses refs for game/location state so the interval callback always reads
+ * the latest Firestore data — avoiding stale-closure bugs.
  */
 export function useAutoDraw() {
   const user = useAuthStore((s) => s.user);
@@ -17,6 +19,26 @@ export function useAutoDraw() {
 
   const drawingRef = useRef(false);
   const autoDrawRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const gameRef = useRef<Game | null>(null);
+  const locationRef = useRef<Location | null>(null);
+  // Track numbers we've sent to Firestore but haven't received back yet
+  const pendingNumbersRef = useRef<Set<number>>(new Set());
+
+  // Keep refs in sync with state (updated every render)
+  gameRef.current = game;
+  locationRef.current = location;
+
+  // Clear pending numbers when drawnNumbers updates from Firestore
+  useEffect(() => {
+    if (game?.drawnNumbers) {
+      const serverDrawn = new Set(game.drawnNumbers);
+      for (const n of pendingNumbersRef.current) {
+        if (serverDrawn.has(n)) {
+          pendingNumbersRef.current.delete(n);
+        }
+      }
+    }
+  }, [game?.drawnNumbers]);
 
   // Listen to user's active location
   useEffect(() => {
@@ -49,32 +71,6 @@ export function useAutoDraw() {
 
   const intervalMs = game?.autoDrawIntervalMs ?? 5000;
 
-  const performDraw = useCallback(async () => {
-    if (drawingRef.current || !location?.id || !game) return;
-
-    const drawn = new Set(game.drawnNumbers ?? []);
-    if (drawn.size >= TOTAL_NUMBERS) return;
-
-    const available = Array.from({ length: TOTAL_NUMBERS }, (_, i) => i + 1)
-      .filter((n) => !drawn.has(n));
-    if (available.length === 0) return;
-
-    const number = available[Math.floor(Math.random() * available.length)]!;
-
-    drawingRef.current = true;
-    try {
-      await drawNumber(location.id, game.id, number);
-    } catch (error) {
-      console.error('[useAutoDraw] Draw error:', error);
-    } finally {
-      drawingRef.current = false;
-    }
-  }, [location?.id, game?.id, game?.drawnNumbers]);
-
-  // Keep a ref to the latest draw function so the interval doesn't go stale
-  const performDrawRef = useRef(performDraw);
-  performDrawRef.current = performDraw;
-
   // Main auto-draw loop
   useEffect(() => {
     if (autoDrawRef.current) {
@@ -84,12 +80,47 @@ export function useAutoDraw() {
 
     if (!shouldAutoDraw) return;
 
-    // Draw immediately on start, then at interval
-    performDrawRef.current();
+    const performDraw = async () => {
+      // Read fresh state from refs every call
+      const currentGame = gameRef.current;
+      const currentLocation = locationRef.current;
 
-    autoDrawRef.current = setInterval(() => {
-      performDrawRef.current();
-    }, intervalMs);
+      if (drawingRef.current || !currentLocation?.id || !currentGame) return;
+      if (currentGame.status !== 'active' || !currentGame.autoDrawActive) return;
+
+      // Combine server-confirmed drawn numbers with locally pending ones
+      const drawn = new Set(currentGame.drawnNumbers ?? []);
+      for (const n of pendingNumbersRef.current) {
+        drawn.add(n);
+      }
+
+      if (drawn.size >= TOTAL_NUMBERS) return;
+
+      const available = Array.from({ length: TOTAL_NUMBERS }, (_, i) => i + 1)
+        .filter((n) => !drawn.has(n));
+      if (available.length === 0) return;
+
+      const number = available[Math.floor(Math.random() * available.length)]!;
+
+      // Mark as pending before the async call
+      pendingNumbersRef.current.add(number);
+      drawingRef.current = true;
+
+      try {
+        await drawNumber(currentLocation.id, currentGame.id, number);
+      } catch (error) {
+        // Remove from pending on failure so it can be retried
+        pendingNumbersRef.current.delete(number);
+        console.error('[useAutoDraw] Draw error:', error);
+      } finally {
+        drawingRef.current = false;
+      }
+    };
+
+    // Draw immediately on start, then at interval
+    performDraw();
+
+    autoDrawRef.current = setInterval(performDraw, intervalMs);
 
     return () => {
       if (autoDrawRef.current) {

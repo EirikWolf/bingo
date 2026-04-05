@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
-// Note: auto-draw logic lives in useAutoDraw hook (App.tsx). This page only handles UI/countdown.
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/stores/authStore';
@@ -9,7 +8,7 @@ import { BigNumber } from '@/components/bigscreen/BigNumber';
 import { NumberBoard } from '@/components/bigscreen/NumberBoard';
 import { WinnerAnnouncement } from '@/components/bigscreen/WinnerAnnouncement';
 import { Spinner } from '@/components/ui/Spinner';
-import { GAME_STATUS_LABELS, TOTAL_NUMBERS } from '@/utils/constants';
+import { TOTAL_NUMBERS } from '@/utils/constants';
 import { bingoSpeech } from '@/utils/speech';
 import { celebrateBigScreen } from '@/utils/effects';
 import type { Location, Game } from '@/types';
@@ -23,11 +22,21 @@ export default function BigScreenPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [drawing, setDrawing] = useState(false);
-  const [showControls, setShowControls] = useState(true);
   const [autoDrawEnabled, setAutoDrawEnabled] = useState(false);
 
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevCurrentNumberRef = useRef<number | null>(null);
+
+  // Refs for local auto-draw (always-fresh data)
+  const gameRef = useRef<Game | null>(null);
+  const locationIdRef = useRef(locationId);
+  const localDrawingRef = useRef(false);
+  const localAutoDrawRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pendingNumbersRef = useRef<Set<number>>(new Set());
+
+  // Keep refs in sync
+  gameRef.current = game;
+  locationIdRef.current = locationId;
 
   const isAdmin = user?.uid ? (location?.adminUids.includes(user.uid) ?? false) : false;
 
@@ -138,7 +147,7 @@ export default function BigScreenPage() {
     }
   }, [locationId, game, availableNumbers, drawing]);
 
-  // Start/pause auto-draw — just toggles Firestore flag; actual drawing is handled by useAutoDraw in App.tsx
+  // Start/pause auto-draw — toggles Firestore flag
   async function handleStartAutoDraw() {
     if (!locationId || !game) return;
     await updateAutoDrawState(locationId, game.id, true, autoDrawInterval * 1000);
@@ -150,7 +159,76 @@ export default function BigScreenPage() {
     await updateAutoDrawState(locationId, game.id, false, autoDrawInterval * 1000);
   }
 
-  // Countdown display — calculates from Firestore timestamps (works for admin and non-admin)
+  // --- Local auto-draw loop ---
+  // Runs directly on BigScreenPage using URL locationId, not dependent on global useAutoDraw.
+  // Uses refs so the interval callback always reads fresh game/location state.
+  useEffect(() => {
+    if (localAutoDrawRef.current) {
+      clearInterval(localAutoDrawRef.current);
+      localAutoDrawRef.current = null;
+    }
+
+    const shouldDraw = isAdmin && autoDrawEnabled && game?.status === 'active';
+    if (!shouldDraw) return;
+
+    const intervalMs = game?.autoDrawIntervalMs || 5000;
+
+    const performDraw = async () => {
+      const g = gameRef.current;
+      const lid = locationIdRef.current;
+      if (localDrawingRef.current || !lid || !g) return;
+      if (g.status !== 'active' || !g.autoDrawActive) return;
+
+      // Combine server-confirmed numbers with locally pending ones
+      const drawn = new Set(g.drawnNumbers ?? []);
+      for (const n of pendingNumbersRef.current) {
+        drawn.add(n);
+      }
+      if (drawn.size >= TOTAL_NUMBERS) return;
+
+      const available = Array.from({ length: TOTAL_NUMBERS }, (_, i) => i + 1)
+        .filter((n) => !drawn.has(n));
+      if (available.length === 0) return;
+
+      const number = available[Math.floor(Math.random() * available.length)]!;
+
+      pendingNumbersRef.current.add(number);
+      localDrawingRef.current = true;
+      try {
+        await drawNumber(lid, g.id, number);
+      } catch (error) {
+        pendingNumbersRef.current.delete(number);
+        console.error('[BigScreen autoDraw] error:', error);
+      } finally {
+        localDrawingRef.current = false;
+      }
+    };
+
+    // Draw immediately, then repeat at interval
+    performDraw();
+    localAutoDrawRef.current = setInterval(performDraw, intervalMs);
+
+    return () => {
+      if (localAutoDrawRef.current) {
+        clearInterval(localAutoDrawRef.current);
+        localAutoDrawRef.current = null;
+      }
+    };
+  }, [isAdmin, autoDrawEnabled, game?.status, game?.autoDrawIntervalMs]);
+
+  // Clear pending numbers when drawnNumbers updates from Firestore
+  useEffect(() => {
+    if (game?.drawnNumbers) {
+      const serverDrawn = new Set(game.drawnNumbers);
+      for (const n of pendingNumbersRef.current) {
+        if (serverDrawn.has(n)) {
+          pendingNumbersRef.current.delete(n);
+        }
+      }
+    }
+  }, [game?.drawnNumbers]);
+
+  // Countdown display — calculates from Firestore timestamps
   useEffect(() => {
     if (countdownRef.current) {
       clearInterval(countdownRef.current);
@@ -187,7 +265,7 @@ export default function BigScreenPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-bingo-900">
+      <div className="flex h-screen items-center justify-center bigscreen-bg">
         <Spinner size="lg" />
       </div>
     );
@@ -195,32 +273,37 @@ export default function BigScreenPage() {
 
   if (!location) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-bingo-900">
+      <div className="flex h-screen items-center justify-center bigscreen-bg">
         <p className="text-xl text-white">Lokasjon ikke funnet</p>
       </div>
     );
   }
 
-  const statusLabel = game ? GAME_STATUS_LABELS[game.status] ?? game.status : 'Ingen spill';
+  const countdownFraction = countdown / ((game?.autoDrawIntervalMs || 5000) / 1000);
 
   return (
-    <div className="min-h-screen bg-bingo-900 text-white p-4 sm:p-8">
-      {/* Header */}
-      <header className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl sm:text-4xl font-bold">{location.name}</h1>
-          <p className="text-bingo-300 text-sm mt-1">{statusLabel}</p>
+    <div className="h-screen overflow-hidden bigscreen-bg text-white flex flex-col">
+
+      {/* ─── Top Bar ─── */}
+      <header className="shrink-0 px-6 py-2 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="flex items-center gap-3">
+          <span className="text-bigscreen-accent text-lg">✦</span>
+          <h1 className="text-xl font-bold tracking-wide">{location.name}</h1>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-5">
           {game && (
-            <div className="text-right text-sm text-bingo-300">
-              <p>{game.couponCount} kuponger</p>
-              <p>{game.drawnNumbers.length} av {game.totalNumbers} tall</p>
-            </div>
+            <>
+              <span className="text-sm text-bigscreen-silver">
+                Kuponger: <strong className="text-white">{game.couponCount}</strong>
+              </span>
+              <span className="text-sm text-bigscreen-silver">
+                Siste tall: <strong className="text-white">{game.drawnNumbers.length}/{game.totalNumbers}</strong>
+              </span>
+            </>
           )}
           <button
             onClick={toggleFullscreen}
-            className="rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20 transition-colors"
+            className="text-bigscreen-silver/50 hover:text-white transition-colors text-lg"
             title={isFullscreen ? 'Avslutt fullskjerm' : 'Fullskjerm'}
           >
             {isFullscreen ? '⊠' : '⊞'}
@@ -228,185 +311,167 @@ export default function BigScreenPage() {
         </div>
       </header>
 
-      {/* No game state */}
+      {/* ─── No game ─── */}
       {!game && (
-        <div className="flex flex-col items-center justify-center py-20">
-          <p className="text-2xl text-bingo-300">Venter på at spillet starter...</p>
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-2xl text-bigscreen-silver">Venter på at spillet starter...</p>
         </div>
       )}
 
-      {/* Game open state */}
+      {/* ─── Open for purchase ─── */}
       {game && game.status === 'open' && (
-        <div className="flex flex-col items-center justify-center py-12">
-          <p className="text-3xl font-bold text-bingo-200">Åpent for kupongkjøp!</p>
-          <p className="mt-4 text-xl text-bingo-400">{game.couponCount} kuponger kjøpt</p>
-          <p className="mt-2 text-bingo-400">Forpliktelse: {game.commitment}</p>
-
-          {/* QR code to join */}
-          <div className="mt-8 flex flex-col items-center">
-            <div className="rounded-2xl bg-white p-4">
+        <div className="flex-1 flex flex-col items-center justify-center gap-6">
+          <p className="text-3xl font-bold">Åpent for kupongkjøp!</p>
+          <p className="text-xl text-bigscreen-silver">{game.couponCount} kuponger kjøpt</p>
+          <div className="glass-panel rounded-2xl p-6 flex flex-col items-center" style={{ border: '1px solid rgba(201,168,76,0.2)' }}>
+            <div className="rounded-xl bg-white p-3">
               <img
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`https://bingoportalen.web.app/spill/${locationId}`)}`}
-                alt="QR-kode for å bli med"
-                width={200}
-                height={200}
+                alt="QR-kode"
+                width={180}
+                height={180}
               />
             </div>
-            <p className="mt-3 text-sm text-bingo-300">Skann for å bli med</p>
-            <p className="text-xs text-bingo-400 mt-1">bingoportalen.web.app</p>
+            <p className="mt-3 text-sm text-bigscreen-silver">Skann for å bli med</p>
           </div>
         </div>
       )}
 
-      {/* Active game */}
+      {/* ═══ ACTIVE GAME: 3-column layout ═══ */}
       {game && (game.status === 'active' || game.status === 'paused') && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left: Current number + countdown + recent */}
-          <div className="lg:col-span-1 flex flex-col items-center gap-6">
-            <div>
-              <p className="text-center text-sm text-bingo-400 mb-2 uppercase tracking-wider">
-                Siste tall
-              </p>
+        <div className="flex-1 min-h-0 flex">
+
+          {/* ── Left Column: Previous numbers as hexagons ── */}
+          <div className="shrink-0 flex flex-col items-center justify-center gap-1 px-4 py-2" style={{ width: 'clamp(10rem, 18vw, 14rem)' }}>
+            {game.drawnNumbers.length > 1 && game.drawnNumbers
+              .slice(-6, -1)
+              .reverse()
+              .map((num, i) => {
+                const hex = getHexForNumber(num);
+                return (
+                  <div
+                    key={num}
+                    className="hex-tile"
+                    style={{
+                      background: `linear-gradient(135deg, ${hex}cc, ${hex}88)`,
+                      opacity: 1 - i * 0.12,
+                      boxShadow: `0 0 15px 3px ${hex}40`,
+                    }}
+                  >
+                    {/* Hex glow border */}
+                    <div
+                      className="hex-border"
+                      style={{ background: `linear-gradient(135deg, ${hex}, ${hex}66)` }}
+                    />
+                    {num}
+                  </div>
+                );
+              })}
+          </div>
+
+          {/* ── Center Column: 3D Sphere Machine ── */}
+          <div className="flex-1 flex flex-col items-center justify-center relative min-w-0">
+            {/* Radial ambient glow behind sphere */}
+            {game.currentNumber && (
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  background: `radial-gradient(ellipse at 50% 50%, ${getHexForNumber(game.currentNumber)}18 0%, transparent 55%)`,
+                }}
+              />
+            )}
+
+            {/* Sphere */}
+            <div className="relative z-10">
               <BigNumber number={game.currentNumber} />
             </div>
 
-            {/* Countdown to next draw */}
-            {autoDrawEnabled && countdown > 0 && game.status === 'active' && (
-              <div className="flex flex-col items-center">
-                <p className="text-xs text-bingo-400 mb-1">Neste tall om</p>
-                <div className="relative h-16 w-16">
-                  <svg className="h-16 w-16 -rotate-90" viewBox="0 0 36 36">
-                    <circle
-                      cx="18" cy="18" r="15.9"
-                      fill="none"
-                      stroke="rgba(255,255,255,0.1)"
-                      strokeWidth="2"
-                    />
-                    <circle
-                      cx="18" cy="18" r="15.9"
-                      fill="none"
-                      stroke="rgba(255,255,255,0.6)"
-                      strokeWidth="2"
-                      strokeDasharray={`${(countdown / ((game.autoDrawIntervalMs || 5000) / 1000)) * 100} 100`}
-                      strokeLinecap="round"
-                      className="transition-all duration-500"
-                    />
-                  </svg>
-                  <span className="absolute inset-0 flex items-center justify-center text-lg font-bold">
-                    {countdown}
-                  </span>
-                </div>
-              </div>
-            )}
+            {/* B-I-N-G-O column dots below sphere */}
+            <div className="relative z-10 flex gap-2 mt-3">
+              {(['bg-ball-b', 'bg-ball-i', 'bg-ball-n', 'bg-ball-g', 'bg-ball-o'] as const).map((c, i) => (
+                <div key={i} className={`w-4 h-4 rounded-full ${c} opacity-80`} />
+              ))}
+            </div>
 
-            {/* Recent draws */}
-            {game.drawnNumbers.length > 1 && (
-              <div>
-                <p className="text-center text-xs text-bingo-400 mb-2">Forrige tall</p>
-                <div className="flex flex-wrap gap-3 justify-center">
-                  {game.drawnNumbers
-                    .slice(-6, -1)
-                    .reverse()
-                    .map((num) => (
-                      <div
-                        key={num}
-                        className={`number-ball h-20 w-20 text-xl font-bold ${getBallColorClass(num)}`}
-                      >
-                        {num}
-                      </div>
-                    ))}
+            {/* Countdown bar */}
+            {autoDrawEnabled && countdown > 0 && game.status === 'active' && (
+              <div className="relative z-10 flex flex-col items-center gap-1 mt-3">
+                <div className="w-48 h-1.5 rounded-full bg-white/10 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-bigscreen-accent transition-all duration-500"
+                    style={{ width: `${countdownFraction * 100}%` }}
+                  />
                 </div>
+                <span className="text-[10px] text-bigscreen-silver/50 font-mono">{countdown}s</span>
               </div>
             )}
 
             {/* Pause indicator */}
             {game.status === 'paused' && (
-              <div className="rounded-lg bg-yellow-500/20 border border-yellow-500/40 px-6 py-3 text-center">
-                <p className="text-lg font-semibold text-yellow-300">PAUSE</p>
+              <div className="relative z-10 mt-3 border border-bigscreen-accent/40 bg-bigscreen-accent/10 px-6 py-1.5 rounded-full">
+                <p className="text-sm font-semibold text-bigscreen-accent tracking-widest">PAUSE</p>
               </div>
             )}
           </div>
 
-          {/* Right: Number board */}
-          <div className="lg:col-span-2">
-            <NumberBoard drawnNumbers={drawnSet} />
+          {/* ── Right Column: Compact Number Board ── */}
+          <div className="shrink-0 py-2 pr-3" style={{ width: 'clamp(14rem, 28vw, 22rem)' }}>
+            <NumberBoard drawnNumbers={drawnSet} currentNumber={game.currentNumber} />
           </div>
         </div>
       )}
 
-      {/* Winners */}
+      {/* ─── Winners overlay ─── */}
       {game && game.winners.length > 0 && (
-        <div className="mt-8">
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/60">
           <WinnerAnnouncement winners={game.winners} />
         </div>
       )}
 
-      {/* Finished state */}
+      {/* ─── Finished ─── */}
       {game && game.status === 'finished' && game.winners.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-20">
-          <p className="text-2xl text-bingo-300">Spillet er avsluttet</p>
-          <p className="mt-2 text-bingo-400">{game.drawnNumbers.length} tall ble trukket</p>
+        <div className="flex-1 flex flex-col items-center justify-center">
+          <p className="text-2xl text-bigscreen-silver">Spillet er avsluttet</p>
+          <p className="mt-2 text-bigscreen-silver/60">{game.drawnNumbers.length} tall ble trukket</p>
         </div>
       )}
 
-      {/* Admin draw controls — fixed bottom-left */}
+      {/* ─── Admin Controls: bottom-right ─── */}
       {isAdmin && game && game.status === 'active' && (
-        <div className="fixed bottom-6 left-6 z-50">
-          {showControls ? (
-            <div className="flex items-center gap-2 rounded-2xl bg-black/70 backdrop-blur-sm px-4 py-3 shadow-lg border border-white/10">
-              {autoDrawEnabled ? (
-                <button
-                  onClick={handlePauseAutoDraw}
-                  className="flex items-center gap-2 rounded-xl bg-yellow-500 hover:bg-yellow-400 text-black font-semibold px-5 py-2.5 text-sm transition-colors"
-                >
-                  <span className="text-lg">⏸</span> Pause
-                </button>
-              ) : (
-                <button
-                  onClick={handleStartAutoDraw}
-                  disabled={availableNumbers.length === 0}
-                  className="flex items-center gap-2 rounded-xl bg-green-500 hover:bg-green-400 disabled:opacity-40 text-white font-semibold px-5 py-2.5 text-sm transition-colors"
-                >
-                  <span className="text-lg">▶</span> Start
-                </button>
-              )}
-              <button
-                onClick={() => {
-                  handleDraw();
-                  if (autoDrawEnabled) {
-                    // Reset countdown visual after manual draw
-                  }
-                }}
-                disabled={drawing || availableNumbers.length === 0}
-                className="flex items-center gap-2 rounded-xl bg-bingo-600 hover:bg-bingo-500 disabled:opacity-40 text-white font-semibold px-5 py-2.5 text-sm transition-colors"
-              >
-                <span className="text-lg">⏭</span> Neste
-              </button>
-              <button
-                onClick={() => setShowControls(false)}
-                className="ml-1 rounded-lg p-1.5 text-white/40 hover:text-white/80 hover:bg-white/10 transition-colors"
-                title="Skjul kontroller"
-              >
-                ✕
-              </button>
-            </div>
+        <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2">
+          {autoDrawEnabled ? (
+            <button
+              onClick={handlePauseAutoDraw}
+              className="glass-panel rounded-xl bg-bigscreen-accent/20 hover:bg-bigscreen-accent/40 text-bigscreen-accent font-semibold px-5 py-2.5 text-sm transition-colors"
+            >
+              ⏸ Pause
+            </button>
           ) : (
             <button
-              onClick={() => setShowControls(true)}
-              className="rounded-full bg-black/50 backdrop-blur-sm p-3 text-white/60 hover:text-white hover:bg-black/70 transition-colors border border-white/10 shadow-lg"
-              title="Vis kontroller"
+              onClick={handleStartAutoDraw}
+              disabled={availableNumbers.length === 0}
+              className="glass-panel rounded-xl bg-green-600/80 hover:bg-green-500 disabled:opacity-40 text-white font-semibold px-5 py-2.5 text-sm transition-colors"
             >
-              🎮
+              ▶ Start
             </button>
           )}
+          <button
+            onClick={handleDraw}
+            disabled={drawing || availableNumbers.length === 0}
+            className="glass-panel rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-40 text-white font-semibold px-5 py-2.5 text-sm transition-colors"
+          >
+            ⏭ Neste
+          </button>
         </div>
       )}
     </div>
   );
 }
 
-function getBallColorClass(num: number): string {
-  const col = Math.floor((num - 1) / 15);
-  const colors = ['bg-ball-b', 'bg-ball-i', 'bg-ball-n', 'bg-ball-g', 'bg-ball-o'];
-  return colors[col] ?? 'bg-gray-400';
+/** Hex color from number (for inline CSS) */
+const HEX_MAP: Record<number, string> = {
+  0: '#ef4444', 1: '#d97706', 2: '#16a34a', 3: '#3b82f6', 4: '#8b5cf6',
+};
+function getHexForNumber(num: number): string {
+  return HEX_MAP[Math.floor((num - 1) / 15)] ?? '#3b82f6';
 }

@@ -26,11 +26,18 @@ export default {
           g: '#3b82f6',    // Blå  (G: 46-60)
           o: '#8b5cf6',    // Lilla (O: 61-75)
         },
+        bigscreen: {
+          bg: '#0a1628',
+          surface: '#112240',
+          accent: '#c9a84c',
+          silver: '#b0b8c8',
+        },
       },
       animation: {
         'bounce-in': 'bounceIn 0.6s ease-out',
         'pulse-glow': 'pulseGlow 2s infinite',
         'slide-up': 'slideUp 0.3s ease-out',
+        'hero-glow': 'heroGlow 2.5s ease-in-out infinite',
       },
       keyframes: {
         bounceIn: {
@@ -45,6 +52,10 @@ export default {
         slideUp: {
           '0%': { transform: 'translateY(20px)', opacity: '0' },
           '100%': { transform: 'translateY(0)', opacity: '1' },
+        },
+        heroGlow: {
+          '0%, 100%': { boxShadow: '0 0 30px 10px var(--hero-glow-color, rgba(59,130,246,0.3))' },
+          '50%': { boxShadow: '0 0 60px 25px var(--hero-glow-color, rgba(59,130,246,0.5))' },
         },
       },
       fontFamily: {

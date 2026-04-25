@@ -56,6 +56,7 @@ export interface LocationSettings {
   allowAnonymous: boolean;
   autoDrawEnabled: boolean;
   autoDrawIntervalMs: number;
+  autoMarkEnabled: boolean;
   winConditions: WinCondition[];
   vippsNumber: string | null;
   vippsDefaultAmount: number | null;
@@ -99,6 +100,7 @@ export interface Game {
   commitment: string;
   autoDrawActive: boolean;
   autoDrawIntervalMs: number;
+  autoMarkEnabled: boolean;
   lastDrawAt: Timestamp | null;
   createdAt: Timestamp;
   startedAt: Timestamp | null;

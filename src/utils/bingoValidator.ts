@@ -1,5 +1,59 @@
-import type { CouponGrid, WinCondition } from '@/types';
+import type { CouponGrid, MarkedGrid, WinCondition } from '@/types';
 import { GRID_SIZE, FREE_CELL_INDEX } from './constants';
+
+/**
+ * Compute the effective marks the UI/validator should use, based on game mode.
+ * - Auto: marked = drawn (or free space).
+ * - Manual: marked = player's marks, but defensively intersected with drawn
+ *   so a stale/invalid mark can never count toward a win.
+ */
+export function computeMarks(
+  numbers: CouponGrid,
+  drawnNumbers: Set<number>,
+  playerMarks: MarkedGrid,
+  autoMark: boolean
+): boolean[] {
+  if (autoMark) return computeEffectiveMarks(numbers, drawnNumbers);
+  return numbers.map((num, index) => {
+    if (index === FREE_CELL_INDEX) return true;
+    return playerMarks[index] === true && drawnNumbers.has(num);
+  });
+}
+
+function checkMarks(marks: boolean[], condition: WinCondition): boolean {
+  switch (condition) {
+    case 'row':
+      return checkRows(marks);
+    case 'column':
+      return checkColumns(marks);
+    case 'diagonal':
+      return checkDiagonals(marks);
+    case 'full_board':
+      return checkFullBoard(marks);
+  }
+}
+
+export function findWinConditionFromMarks(
+  marks: boolean[],
+  activeConditions: WinCondition[]
+): WinCondition | null {
+  for (const condition of activeConditions) {
+    if (checkMarks(marks, condition)) return condition;
+  }
+  return null;
+}
+
+export function countRemainingFromMarks(
+  marks: boolean[],
+  activeConditions: WinCondition[]
+): number {
+  let minRemaining = GRID_SIZE * GRID_SIZE;
+  for (const condition of activeConditions) {
+    const remaining = countRemainingForCondition(marks, condition);
+    if (remaining < minRemaining) minRemaining = remaining;
+  }
+  return minRemaining;
+}
 
 /**
  * Check if a coupon has achieved a specific win condition.

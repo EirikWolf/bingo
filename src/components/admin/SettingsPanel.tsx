@@ -22,6 +22,8 @@ export function SettingsPanel({ location, locationId, currentUserId }: SettingsP
   const [pricePerCoupon, setPricePerCoupon] = useState(s.couponPricing?.pricePerCoupon?.toString() ?? '');
   const [defaultCommitment, setDefaultCommitment] = useState(s.defaultCommitment);
   const [maxCoupons, setMaxCoupons] = useState(s.maxCouponsPerPlayer.toString());
+  const [defaultAutoDraw, setDefaultAutoDraw] = useState(s.autoDrawEnabled ?? false);
+  const [defaultAutoMark, setDefaultAutoMark] = useState(s.autoMarkEnabled ?? true);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -110,6 +112,8 @@ export function SettingsPanel({ location, locationId, currentUserId }: SettingsP
           : null,
         defaultCommitment,
         maxCouponsPerPlayer: Number(maxCoupons) || 0,
+        autoDrawEnabled: defaultAutoDraw,
+        autoMarkEnabled: defaultAutoMark,
       });
       toast.success('Innstillinger lagret');
     } catch (error) {
@@ -324,6 +328,27 @@ export function SettingsPanel({ location, locationId, currentUserId }: SettingsP
               className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none ${errors.maxCoupons ? 'border-red-300' : 'border-gray-300 focus:border-bingo-500'}`}
             />
             {errors.maxCoupons && <p className="text-xs text-red-500 mt-1">{errors.maxCoupons}</p>}
+          </div>
+          <div>
+            <p className="text-sm text-gray-600 mb-2">Standard spillemodus for nye spill</p>
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={defaultAutoDraw}
+                onChange={(e) => setDefaultAutoDraw(e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-gray-300 text-bingo-600 focus:ring-bingo-500"
+              />
+              <span className="text-sm text-gray-700">Automatisk trekning</span>
+            </label>
+            <label className="flex items-start gap-2 cursor-pointer mt-1">
+              <input
+                type="checkbox"
+                checked={defaultAutoMark}
+                onChange={(e) => setDefaultAutoMark(e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-gray-300 text-bingo-600 focus:ring-bingo-500"
+              />
+              <span className="text-sm text-gray-700">Automatisk utfylling av kuponger</span>
+            </label>
           </div>
         </div>
       </Card>

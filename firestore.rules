@@ -193,8 +193,14 @@ service cloud.firestore {
                 'paymentStatus', 'purchasedAt'
               ]);
 
-          // Coupons are immutable after creation (except admin marking winner)
-          allow update: if isLocationAdmin(locationId);
+          // Coupons are immutable after creation (except admin marking winner,
+          // or owner toggling markedCells in manual-mark games).
+          allow update: if isLocationAdmin(locationId)
+            || (
+              isOwner(resource.data.userId)
+              && getGameData(locationId, gameId).autoMarkEnabled == false
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['markedCells'])
+            );
 
           allow delete: if false;
         }

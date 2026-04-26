@@ -1,3 +1,21 @@
+# Fase 14: Konfigurerbar auto/manuell trekning og utfylling — ✅ FULLFØRT
+
+> Startet: 2026-04-26 | Fullført: 2026-04-26
+
+## Oppgaver
+
+- [x] **Datamodell.** `LocationSettings.autoMarkEnabled` (default for nye spill, default `true`) og `Game.autoMarkEnabled` (immutable etter opprettelse).
+- [x] **Validator.** `computeMarks(numbers, drawn, playerMarks, autoMark)`, `findWinConditionFromMarks`, `countRemainingFromMarks`. Manuell modus intersekter defensivt med trukne tall.
+- [x] **CouponGrid.** Ny `autoMark`-prop og `onToggleMark`-callback. Klikkbare celler i manuell modus med tastaturstøtte. Gyllen ring (`bingo-cell-drawn-hint`) på umarkerte celler hvis nummer er trukket.
+- [x] **GamePage.** Velger validator-variant ut fra `game.autoMarkEnabled`. Ny `handleToggleMark` som kaller `toggleCouponMark`-action; viser toast hvis tallet ikke er trukket.
+- [x] **Admin: spillopprettelse.** To checkbokser ("Automatisk trekning" + "Automatisk utfylling av kuponger") forhåndsutfylt fra lokasjons-defaults.
+- [x] **Admin: lokasjonsinnstillinger.** `SettingsPanel` har defaults for begge moduser.
+- [x] **Firestore-regler.** Eier kan oppdatere kun `markedCells` på egen kupong når `game.autoMarkEnabled == false`.
+- [x] **Seed-data.** Alle locations og spill får `autoMarkEnabled: true` (preserve current behavior).
+- [x] **Verifisering.** Typecheck OK, 25 unit-tester grønne, build OK.
+
+# Tidligere faser
+
 # Fase 13: Stabilisering, oppgraderinger og smarte varsler — ✅ FULLFØRT
 
 > Startet: 2026-03-26 | Fullført: 2026-03-26

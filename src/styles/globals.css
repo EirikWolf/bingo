@@ -83,6 +83,11 @@
     @apply bg-bingo-100 text-bingo-700 border border-bingo-300 dark:bg-bingo-900 dark:text-bingo-300 dark:border-bingo-700;
   }
 
+  /* Hint in manual mode: number is drawn but not yet marked by player */
+  .bingo-cell-drawn-hint {
+    @apply ring-2 ring-amber-400 dark:ring-amber-500;
+  }
+
   /* Number ball */
   .number-ball {
     @apply flex items-center justify-center rounded-full font-bold text-white shadow-lg;

@@ -3,9 +3,15 @@ import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/stores/authStore';
 import { useGameStore } from '@/stores/gameStore';
-import { purchaseCoupon } from '@/services/actions';
+import { purchaseCoupon, toggleCouponMark } from '@/services/actions';
 import { submitBingoClaim } from '@/services/actions';
-import { findWinCondition, countRemainingForWin } from '@/utils/bingoValidator';
+import {
+  findWinCondition,
+  countRemainingForWin,
+  computeMarks,
+  findWinConditionFromMarks,
+  countRemainingFromMarks,
+} from '@/utils/bingoValidator';
 import { GAME_STATUS_LABELS } from '@/utils/constants';
 import { celebrateBingo, soundEffects } from '@/utils/effects';
 import { CouponGrid } from '@/components/bingo/CouponGrid';
@@ -67,21 +73,45 @@ export default function GamePage() {
   // Active coupon
   const activeCoupon = coupons[activeCouponIndex] ?? null;
 
-  // Win condition check for active coupon
+  // Game uses auto-mark by default for backwards compatibility
+  const autoMark = game?.autoMarkEnabled ?? true;
+
+  // Win condition check for active coupon — based on player's marks in manual mode
   const winResult = useMemo(() => {
     if (!activeCoupon || !game) return null;
-    return findWinCondition(
-      activeCoupon.numbers,
-      drawnSet,
-      game.winConditions
-    );
-  }, [activeCoupon, game, drawnSet]);
+    if (autoMark) {
+      return findWinCondition(activeCoupon.numbers, drawnSet, game.winConditions);
+    }
+    const marks = computeMarks(activeCoupon.numbers, drawnSet, activeCoupon.markedCells, false);
+    return findWinConditionFromMarks(marks, game.winConditions);
+  }, [activeCoupon, game, drawnSet, autoMark]);
 
   // Remaining count for nearest win
   const remaining = useMemo(() => {
     if (!activeCoupon || !game) return 99;
-    return countRemainingForWin(activeCoupon.numbers, drawnSet, game.winConditions);
-  }, [activeCoupon, game, drawnSet]);
+    if (autoMark) {
+      return countRemainingForWin(activeCoupon.numbers, drawnSet, game.winConditions);
+    }
+    const marks = computeMarks(activeCoupon.numbers, drawnSet, activeCoupon.markedCells, false);
+    return countRemainingFromMarks(marks, game.winConditions);
+  }, [activeCoupon, game, drawnSet, autoMark]);
+
+  // Manual-mark toggle handler
+  async function handleToggleMark(cellIndex: number, marked: boolean) {
+    if (!locationId || !game || !activeCoupon || autoMark) return;
+    const num = activeCoupon.numbers[cellIndex];
+    if (num === undefined) return;
+    if (marked && !drawnSet.has(num)) {
+      toast('Tallet er ikke trukket ennå', { icon: '⏳' });
+      return;
+    }
+    try {
+      await toggleCouponMark(locationId, game.id, activeCoupon.id, cellIndex, marked);
+    } catch (error) {
+      console.error('Toggle mark error:', error);
+      toast.error('Kunne ikke markere celle');
+    }
+  }
 
   // Track drawn numbers for sound effects
   const prevDrawnCountRef = useRef(0);
@@ -306,6 +336,8 @@ export default function GamePage() {
               numbers={activeCoupon.numbers}
               markedCells={activeCoupon.markedCells}
               drawnNumbers={drawnSet}
+              autoMark={autoMark}
+              onToggleMark={autoMark ? undefined : handleToggleMark}
             />
 
             {/* Winner badge */}

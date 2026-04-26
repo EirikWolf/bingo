@@ -43,6 +43,8 @@ export default function AdminPage() {
   const [newPaymentType, setNewPaymentType] = useState<'commitment' | 'vipps'>('commitment');
   const [newCommitment, setNewCommitment] = useState('');
   const [newWinConditions, setNewWinConditions] = useState<WinCondition[]>(['row', 'column', 'diagonal']);
+  const [newAutoDraw, setNewAutoDraw] = useState(false);
+  const [newAutoMark, setNewAutoMark] = useState(true);
   const [creating, setCreating] = useState(false);
 
   // Draw state
@@ -129,7 +131,19 @@ export default function AdminPage() {
     if (location?.settings.defaultCommitment) {
       setNewCommitment(location.settings.defaultCommitment);
     }
-  }, [location?.settings.speech, location?.settings.autoDrawIntervalMs, location?.settings.defaultCommitment]);
+    if (location?.settings.autoDrawEnabled !== undefined) {
+      setNewAutoDraw(location.settings.autoDrawEnabled);
+    }
+    if (location?.settings.autoMarkEnabled !== undefined) {
+      setNewAutoMark(location.settings.autoMarkEnabled);
+    }
+  }, [
+    location?.settings.speech,
+    location?.settings.autoDrawIntervalMs,
+    location?.settings.defaultCommitment,
+    location?.settings.autoDrawEnabled,
+    location?.settings.autoMarkEnabled,
+  ]);
 
   // Listen to location
   useEffect(() => {
@@ -289,7 +303,10 @@ export default function AdminPage() {
       const commitment = newPaymentType === 'vipps'
         ? `Vipps-betaling: ${location?.settings.couponPricing?.pricePerCoupon ?? 0} kr`
         : newCommitment;
-      await createGame(locationId, commitment, newWinConditions);
+      await createGame(locationId, commitment, newWinConditions, {
+        autoDrawActive: newAutoDraw,
+        autoMarkEnabled: newAutoMark,
+      });
       toast.success('Spill opprettet!');
       setShowCreateModal(false);
     } catch (error) {
@@ -1071,6 +1088,40 @@ export default function AdminPage() {
                   {label}
                 </button>
               ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="block text-sm font-medium text-gray-700 mb-2">Spillemodus</p>
+            <div className="space-y-2">
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={newAutoDraw}
+                  onChange={(e) => setNewAutoDraw(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-gray-300 text-bingo-600 focus:ring-bingo-500"
+                />
+                <span className="text-sm text-gray-700">
+                  <span className="font-medium">Automatisk trekning</span>
+                  <span className="block text-xs text-gray-500">
+                    Tall trekkes automatisk i fast intervall (kan toggles under spill)
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={newAutoMark}
+                  onChange={(e) => setNewAutoMark(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-gray-300 text-bingo-600 focus:ring-bingo-500"
+                />
+                <span className="text-sm text-gray-700">
+                  <span className="font-medium">Automatisk utfylling av kuponger</span>
+                  <span className="block text-xs text-gray-500">
+                    Slå av for tradisjonell bingo — spillerne tapper selv på trukne tall
+                  </span>
+                </span>
+              </label>
             </div>
           </div>
 

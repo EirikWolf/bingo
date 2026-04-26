@@ -12,7 +12,7 @@ import {
 } from 'firebase/firestore';
 import { db, functions } from './firebase';
 import { httpsCallable } from 'firebase/functions';
-import { locationRef, gameRef, userRef } from './firestore';
+import { locationRef, gameRef, userRef, couponRef } from './firestore';
 import { generateCouponNumbers, createEmptyMarkedGrid } from '@/utils/couponGenerator';
 import { VALID_STATUS_TRANSITIONS } from '@/utils/constants';
 import type { GameStatus, WinCondition, PaymentMethod, PaymentStatus } from '@/types';
@@ -125,7 +125,8 @@ export async function confirmCouponPayment(
 export async function createGame(
   locationId: string,
   commitment: string,
-  winConditions: WinCondition[]
+  winConditions: WinCondition[],
+  options: { autoDrawActive?: boolean; autoMarkEnabled?: boolean } = {}
 ): Promise<string> {
   const batch = writeBatch(db);
 
@@ -140,8 +141,9 @@ export async function createGame(
     couponCount: 0,
     playerCount: 0,
     commitment,
-    autoDrawActive: false,
+    autoDrawActive: options.autoDrawActive ?? false,
     autoDrawIntervalMs: 5000,
+    autoMarkEnabled: options.autoMarkEnabled ?? true,
     lastDrawAt: null,
     createdAt: serverTimestamp(),
     startedAt: null,
@@ -216,6 +218,25 @@ export async function updateAutoDrawState(
   await updateDoc(gameRef(locationId, gameId), {
     autoDrawActive: active,
     autoDrawIntervalMs: intervalMs,
+  });
+}
+
+// ─── Manual coupon marking ───────────────────────────────
+
+/**
+ * Toggle a single cell in a coupon's markedCells array.
+ * Only valid in manual-mark games. Server-side rules enforce that
+ * the cell's number must already be drawn.
+ */
+export async function toggleCouponMark(
+  locationId: string,
+  gameId: string,
+  couponId: string,
+  cellIndex: number,
+  marked: boolean
+): Promise<void> {
+  await updateDoc(couponRef(locationId, gameId, couponId), {
+    [`markedCells.${cellIndex}`]: marked,
   });
 }
 
@@ -368,6 +389,7 @@ export async function createLocation(
       allowAnonymous: false,
       autoDrawEnabled: false,
       autoDrawIntervalMs: 5000,
+      autoMarkEnabled: true,
       winConditions: ['row', 'column', 'diagonal'],
       vippsNumber: null,
       vippsDefaultAmount: null,

@@ -8,17 +8,29 @@ interface CouponGridProps {
   numbers: CouponGridType;
   markedCells: MarkedGrid;
   drawnNumbers: Set<number>;
+  autoMark?: boolean;
+  onToggleMark?: (cellIndex: number, marked: boolean) => void;
   className?: string;
 }
 
-export function CouponGrid({ numbers, markedCells, drawnNumbers, className = '' }: CouponGridProps) {
-  // Compute effective marks: cell is marked if its number has been drawn
+export function CouponGrid({
+  numbers,
+  markedCells,
+  drawnNumbers,
+  autoMark = true,
+  onToggleMark,
+  className = '',
+}: CouponGridProps) {
+  // Effective marks shown in the UI:
+  //  - auto: drawn ∩ numbers (+ free space)
+  //  - manual: only player-marked cells whose number has been drawn (+ free space)
   const effectiveMarks = useMemo(() => {
     return numbers.map((num, index) => {
       if (index === FREE_CELL_INDEX) return true;
-      return drawnNumbers.has(num);
+      if (autoMark) return drawnNumbers.has(num);
+      return (markedCells[index] ?? false) && drawnNumbers.has(num);
     });
-  }, [numbers, drawnNumbers]);
+  }, [numbers, drawnNumbers, markedCells, autoMark]);
 
   return (
     <div className={`select-none ${className}`}>
@@ -43,6 +55,8 @@ export function CouponGrid({ numbers, markedCells, drawnNumbers, className = '' 
             const isMarked = effectiveMarks[index] ?? false;
             const isFreeCell = index === FREE_CELL_INDEX;
             const isNewlyMarked = !isFreeCell && isMarked && !(markedCells[index] ?? false);
+            const isDrawn = drawnNumbers.has(num);
+            const isInteractive = !autoMark && !isFreeCell && !!onToggleMark;
 
             return (
               <CouponCell
@@ -51,6 +65,9 @@ export function CouponGrid({ numbers, markedCells, drawnNumbers, className = '' 
                 isMarked={isMarked}
                 isFreeCell={isFreeCell}
                 isNewlyMarked={isNewlyMarked}
+                isDrawn={isDrawn}
+                isInteractive={isInteractive}
+                onClick={isInteractive ? () => onToggleMark!(index, !isMarked) : undefined}
               />
             );
           })
@@ -65,9 +82,12 @@ interface CouponCellProps {
   isMarked: boolean;
   isFreeCell: boolean;
   isNewlyMarked: boolean;
+  isDrawn: boolean;
+  isInteractive: boolean;
+  onClick?: () => void;
 }
 
-function CouponCell({ number, isMarked, isFreeCell, isNewlyMarked }: CouponCellProps) {
+function CouponCell({ number, isMarked, isFreeCell, isNewlyMarked, isDrawn, isInteractive, onClick }: CouponCellProps) {
   const baseClasses = 'bingo-cell text-base sm:text-lg';
 
   if (isFreeCell) {
@@ -82,21 +102,55 @@ function CouponCell({ number, isMarked, isFreeCell, isNewlyMarked }: CouponCellP
   }
 
   if (isMarked) {
-    return (
+    const cell = (
       <motion.div
-        className={`${baseClasses} bingo-cell-marked ${isNewlyMarked ? 'bingo-cell-glow' : ''}`}
+        className={`${baseClasses} bingo-cell-marked ${isNewlyMarked ? 'bingo-cell-glow' : ''} ${isInteractive ? 'cursor-pointer' : ''}`}
         initial={isNewlyMarked ? { scale: 0.8 } : false}
         animate={{ scale: 1 }}
         transition={{ type: 'spring', stiffness: 300, damping: 20 }}
         aria-label={`${number}, markert`}
+        onClick={onClick}
+        role={isInteractive ? 'button' : undefined}
+        tabIndex={isInteractive ? 0 : undefined}
+        onKeyDown={
+          isInteractive && onClick
+            ? e => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onClick();
+                }
+              }
+            : undefined
+        }
       >
         {number}
       </motion.div>
     );
+    return cell;
   }
 
+  // Unmarked. In manual mode show a hint if the number has been drawn.
+  const hintClass = isInteractive && isDrawn ? 'bingo-cell-drawn-hint' : '';
+  const interactiveClass = isInteractive ? 'cursor-pointer' : '';
+
   return (
-    <div className={`${baseClasses} bingo-cell-unmarked`} aria-label={`${number}`}>
+    <div
+      className={`${baseClasses} bingo-cell-unmarked ${hintClass} ${interactiveClass}`}
+      aria-label={isDrawn ? `${number}, trukket` : `${number}`}
+      onClick={onClick}
+      role={isInteractive ? 'button' : undefined}
+      tabIndex={isInteractive ? 0 : undefined}
+      onKeyDown={
+        isInteractive && onClick
+          ? e => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
+    >
       {number}
     </div>
   );
